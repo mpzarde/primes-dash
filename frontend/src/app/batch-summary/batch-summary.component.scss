@@ -1,0 +1,225 @@
+.batch-summary-container {
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+mat-card {
+  margin-bottom: 20px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+mat-card-header {
+  margin-bottom: 20px;
+}
+
+mat-card-title {
+  font-size: 24px;
+  font-weight: 500;
+  color: #1976d2;
+}
+
+mat-card-subtitle {
+  font-size: 14px;
+  color: #666;
+}
+
+// Chart Section
+.chart-section {
+  margin-bottom: 30px;
+  
+  h3 {
+    margin: 0 0 20px 0;
+    font-size: 18px;
+    font-weight: 500;
+    color: #333;
+  }
+}
+
+.chart-container {
+  height: 300px;
+  width: 100%;
+  position: relative;
+  background: #f9f9f9;
+  border-radius: 8px;
+  padding: 10px;
+  border: 1px solid #e0e0e0;
+}
+
+// Filter Section
+.filter-section {
+  margin-bottom: 20px;
+  
+  mat-form-field {
+    width: 300px;
+  }
+}
+
+// Table Section
+.table-container {
+  overflow-x: auto;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+}
+
+.batch-table {
+  width: 100%;
+  min-width: 800px;
+  background: white;
+}
+
+// Table cell styling
+.mat-header-cell {
+  font-weight: 600;
+  color: #1976d2;
+  background-color: #f5f5f5;
+}
+
+.mat-cell {
+  padding: 12px 8px;
+}
+
+.number-cell {
+  font-family: 'Roboto Mono', monospace;
+  font-weight: 500;
+}
+
+.found-count {
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.rps-value {
+  color: #ff9800;
+  font-weight: 600;
+}
+
+// Status styling
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  
+  .status-icon {
+    margin-right: 6px;
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+  
+  &.status-completed {
+    background-color: #e8f5e8;
+    color: #2e7d32;
+    
+    .status-icon {
+      color: #4caf50;
+    }
+  }
+  
+  &.status-in-progress {
+    background-color: #fff3e0;
+    color: #ef6c00;
+    
+    .status-icon {
+      color: #ff9800;
+    }
+  }
+}
+
+// No data styling
+.no-data {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #666;
+  font-style: italic;
+  
+  mat-icon {
+    margin-right: 8px;
+    color: #999;
+  }
+}
+
+// Paginator styling
+mat-paginator {
+  border-top: 1px solid #e0e0e0;
+  background-color: #fafafa;
+}
+
+// Responsive design
+@media (max-width: 768px) {
+  .batch-summary-container {
+    padding: 10px;
+  }
+  
+  .filter-section mat-form-field {
+    width: 100%;
+  }
+  
+  .chart-container {
+    height: 250px;
+  }
+  
+  .batch-table {
+    min-width: 600px;
+  }
+  
+  .mat-cell {
+    padding: 8px 4px;
+    font-size: 12px;
+  }
+  
+  .status-chip {
+    padding: 4px 8px;
+    font-size: 11px;
+    
+    .status-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+  }
+}
+
+// Loading animation
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.loading {
+  animation: pulse 2s infinite;
+}
+
+// Hover effects
+.mat-row:hover {
+  background-color: #f5f5f5;
+  transition: background-color 0.2s ease;
+}
+
+// Sort indicators
+.mat-sort-header-arrow {
+  color: #1976d2;
+}
+
+// Improved spacing
+mat-card-content {
+  padding: 0;
+  
+  > div:not(:last-child) {
+    margin-bottom: 24px;
+  }
+}

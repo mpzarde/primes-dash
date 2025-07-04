@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Primes Dashboard Socket.IO Test Client</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .event {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-left: 3px solid #007bff;
+            background-color: #e3f2fd;
+        }
+        .event.batch { border-left-color: #28a745; background-color: #d4edda; }
+        .event.job { border-left-color: #ffc107; background-color: #fff3cd; }
+        .event.error { border-left-color: #dc3545; background-color: #f8d7da; }
+    </style>
+</head>
+<body>
+    <h1>🔌 Primes Dashboard Socket.IO Test Client</h1>
+    
+    <div class="container">
+        <h2>Connection Status</h2>
+        <div id="status" class="status disconnected">Disconnected</div>
+        <button id="connectBtn" onclick="connectSocket()">Connect</button>
+        <button id="disconnectBtn" onclick="disconnectSocket()" disabled>Disconnect</button>
+    </div>
+
+    <div class="container">
+        <h2>Subscriptions</h2>
+        <button id="subBatches" onclick="subscribeTo('batches')" disabled>Subscribe to Batches</button>
+        <button id="subJobs" onclick="subscribeTo('jobs')" disabled>Subscribe to Jobs</button>
+        <button id="subSolutions" onclick="subscribeTo('solutions')" disabled>Subscribe to Solutions</button>
+        <br>
+        <button id="unsubBatches" onclick="unsubscribeFrom('batches')" disabled>Unsubscribe from Batches</button>
+        <button id="unsubJobs" onclick="unsubscribeFrom('jobs')" disabled>Unsubscribe from Jobs</button>
+        <button id="unsubSolutions" onclick="unsubscribeFrom('solutions')" disabled>Unsubscribe from Solutions</button>
+    </div>
+
+    <div class="container">
+        <h2>Test Events</h2>
+        <button onclick="testEvent('batch_added')" disabled id="testBatch">Test Batch Added</button>
+        <button onclick="testEvent('job_started')" disabled id="testJobStart">Test Job Started</button>
+        <button onclick="testEvent('job_completed')" disabled id="testJobComplete">Test Job Completed</button>
+        <button onclick="testEvent('error')" disabled id="testError">Test Error</button>
+    </div>
+
+    <div class="container">
+        <h2>Event Log</h2>
+        <button onclick="clearLog()">Clear Log</button>
+        <div id="eventLog" class="log"></div>
+    </div>
+
+    <script>
+        let socket = null;
+        const eventLog = document.getElementById('eventLog');
+        const statusEl = document.getElementById('status');
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = `event ${type}`;
+            div.textContent = `[${timestamp}] ${message}`;
+            eventLog.appendChild(div);
+            eventLog.scrollTop = eventLog.scrollHeight;
+        }
+
+        function updateStatus(connected) {
+            if (connected) {
+                statusEl.textContent = 'Connected';
+                statusEl.className = 'status connected';
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('disconnectBtn').disabled = false;
+                
+                // Enable subscription buttons
+                ['subBatches', 'subJobs', 'subSolutions', 
+                 'unsubBatches', 'unsubJobs', 'unsubSolutions',
+                 'testBatch', 'testJobStart', 'testJobComplete', 'testError'].forEach(id => {
+                    document.getElementById(id).disabled = false;
+                });
+            } else {
+                statusEl.textContent = 'Disconnected';
+                statusEl.className = 'status disconnected';
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('disconnectBtn').disabled = true;
+                
+                // Disable all other buttons
+                ['subBatches', 'subJobs', 'subSolutions', 
+                 'unsubBatches', 'unsubJobs', 'unsubSolutions',
+                 'testBatch', 'testJobStart', 'testJobComplete', 'testError'].forEach(id => {
+                    document.getElementById(id).disabled = true;
+                });
+            }
+        }
+
+        function connectSocket() {
+            if (socket) {
+                socket.disconnect();
+            }
+            
+            log('Connecting to Socket.IO server...');
+            socket = io('ws://localhost:3000');
+            
+            socket.on('connect', () => {
+                log('✅ Connected to server', 'info');
+                updateStatus(true);
+            });
+            
+            socket.on('disconnect', () => {
+                log('❌ Disconnected from server', 'error');
+                updateStatus(false);
+            });
+            
+            socket.on('welcome', (data) => {
+                log(`👋 Welcome: ${data.message} (Client ID: ${data.clientId})`, 'info');
+            });
+            
+            socket.on('subscription:confirmed', (data) => {
+                log(`✅ Subscription confirmed: ${data.type}`, 'info');
+            });
+            
+            socket.on('batch:added', (data) => {
+                log(`📦 New batch added: ${data.batch.id} (${data.batch.status})`, 'batch');
+            });
+            
+            socket.on('batch:updated', (data) => {
+                log(`📦 Batch updated: ${data.batch.id} (${data.batch.status})`, 'batch');
+            });
+            
+            socket.on('job:started', (data) => {
+                log(`🚀 Job started: ${data.jobId} (PID: ${data.pid})`, 'job');
+            });
+            
+            socket.on('job:completed', (data) => {
+                log(`✅ Job completed: ${data.jobId} (Duration: ${data.duration}s)`, 'job');
+            });
+            
+            socket.on('job:failed', (data) => {
+                log(`❌ Job failed: ${data.jobId} (${data.message})`, 'error');
+            });
+            
+            socket.on('job:status_changed', (data) => {
+                log(`🔄 Job status changed: ${data.jobId} → ${data.status}`, 'job');
+            });
+            
+            socket.on('solution:found', (data) => {
+                log(`🎯 Solution found: ${data.solution.cubesCount} cubes (${data.solution.parameterCombination.a}, ${data.solution.parameterCombination.b}, ${data.solution.parameterCombination.c}, ${data.solution.parameterCombination.d})`, 'batch');
+            });
+            
+            socket.on('error', (data) => {
+                log(`❌ Error: ${data.error} - ${data.message}`, 'error');
+            });
+        }
+
+        function disconnectSocket() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+        }
+
+        function subscribeTo(type) {
+            if (socket) {
+                socket.emit(`subscribe:${type}`);
+                log(`📡 Subscribing to ${type} events...`);
+            }
+        }
+
+        function unsubscribeFrom(type) {
+            if (socket) {
+                socket.emit(`unsubscribe:${type}`);
+                log(`📡 Unsubscribing from ${type} events...`);
+            }
+        }
+
+        async function testEvent(eventType) {
+            try {
+                const testData = {
+                    batch_added: {
+                        eventType: 'batch_added',
+                        data: {
+                            id: `test_batch_${Date.now()}`,
+                            timestamp: new Date(),
+                            status: 'completed',
+                            startTime: new Date(),
+                            endTime: new Date(),
+                            duration: 300,
+                            logFile: 'test.log',
+                            summary: 'Test batch summary'
+                        }
+                    },
+                    job_started: {
+                        eventType: 'job_started',
+                        data: {
+                            jobId: `test_job_${Date.now()}`,
+                            pid: 12345
+                        }
+                    },
+                    job_completed: {
+                        eventType: 'job_completed',
+                        data: {
+                            jobId: `test_job_${Date.now()}`,
+                            pid: 12345,
+                            startTime: new Date(Date.now() - 300000).toISOString(),
+                            message: 'Test job completed successfully'
+                        }
+                    },
+                    error: {
+                        eventType: 'error',
+                        data: {
+                            error: 'TEST_ERROR',
+                            message: 'This is a test error message'
+                        }
+                    }
+                };
+                
+                const response = await fetch('http://localhost:3000/api/subscribe/test', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(testData[eventType])
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    log(`🧪 Test event triggered: ${eventType}`);
+                } else {
+                    log(`❌ Test failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Test request failed: ${error.message}`, 'error');
+            }
+        }
+
+        function clearLog() {
+            eventLog.innerHTML = '';
+        }
+
+        // Initialize
+        updateStatus(false);
+    </script>
+</body>
+</html>
