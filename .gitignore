@@ -6,7 +6,8 @@
 node_modules/
 jspm_packages/
 
-# Yarn Integrity file
+# Yarn files (using npm instead)
+yarn.lock
 .yarn-integrity
 
 # Optional npm cache directory
