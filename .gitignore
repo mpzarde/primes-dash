@@ -12,8 +12,8 @@ jspm_packages/
 # Optional npm cache directory
 .npm
 
-# Angular cache
-.angular/cache
+# Angular cache and build files
+.angular/
 
 # ============================================
 # BUILD ARTIFACTS
