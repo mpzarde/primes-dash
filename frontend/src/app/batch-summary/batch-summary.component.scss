@@ -11,6 +11,15 @@ mat-card {
 
 mat-card-header {
   margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
 }
 
 mat-card-title {
@@ -24,32 +33,11 @@ mat-card-subtitle {
   color: #666;
 }
 
-// Chart Section
-.chart-section {
-  margin-bottom: 30px;
-  
-  h3 {
-    margin: 0 0 20px 0;
-    font-size: 18px;
-    font-weight: 500;
-    color: #333;
-  }
-}
-
-.chart-container {
-  height: 300px;
-  width: 100%;
-  position: relative;
-  background: #f9f9f9;
-  border-radius: 8px;
-  padding: 10px;
-  border: 1px solid #e0e0e0;
-}
 
 // Filter Section
 .filter-section {
   margin-bottom: 20px;
-  
+
   mat-form-field {
     width: 300px;
   }
@@ -104,27 +92,27 @@ mat-card-subtitle {
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  
+
   .status-icon {
     margin-right: 6px;
     font-size: 16px;
     width: 16px;
     height: 16px;
   }
-  
+
   &.status-completed {
     background-color: #e8f5e8;
     color: #2e7d32;
-    
+
     .status-icon {
       color: #4caf50;
     }
   }
-  
+
   &.status-in-progress {
     background-color: #fff3e0;
     color: #ef6c00;
-    
+
     .status-icon {
       color: #ff9800;
     }
@@ -139,7 +127,7 @@ mat-card-subtitle {
   padding: 40px 20px;
   color: #666;
   font-style: italic;
-  
+
   mat-icon {
     margin-right: 8px;
     color: #999;
@@ -157,28 +145,24 @@ mat-paginator {
   .batch-summary-container {
     padding: 10px;
   }
-  
+
   .filter-section mat-form-field {
     width: 100%;
   }
-  
-  .chart-container {
-    height: 250px;
-  }
-  
+
   .batch-table {
     min-width: 600px;
   }
-  
+
   .mat-cell {
     padding: 8px 4px;
     font-size: 12px;
   }
-  
+
   .status-chip {
     padding: 4px 8px;
     font-size: 11px;
-    
+
     .status-icon {
       font-size: 14px;
       width: 14px;
@@ -215,10 +199,57 @@ mat-paginator {
   color: #1976d2;
 }
 
+// Solutions Section
+.solutions-section {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.solutions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+
+  h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 500;
+    color: #333;
+
+    .solution-count {
+      color: #1976d2;
+      font-weight: 400;
+      margin-left: 8px;
+    }
+  }
+}
+
+.solutions-table {
+  width: 100%;
+  min-width: 800px;
+  background: white;
+}
+
+.solution-value {
+  color: #1976d2;
+  font-weight: 600;
+}
+
+// Selected row styling
+.selected-row {
+  background-color: #e3f2fd;
+
+  &:hover {
+    background-color: #bbdefb !important;
+  }
+}
+
 // Improved spacing
 mat-card-content {
   padding: 0;
-  
+
   > div:not(:last-child) {
     margin-bottom: 24px;
   }

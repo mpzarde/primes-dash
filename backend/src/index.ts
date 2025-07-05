@@ -9,6 +9,7 @@ import solutionsRouter from './routes/solutions';
 import stateRouter from './routes/state';
 import jobRouter from './routes/job';
 import subscribeRouter from './routes/subscribe';
+import configRouter from './routes/config';
 
 // Create Express app
 const app = express();
@@ -35,6 +36,7 @@ app.use('/api/solutions', solutionsRouter);
 app.use('/api/state', stateRouter);
 app.use('/api/job', jobRouter);
 app.use('/api/subscribe', subscribeRouter);
+app.use('/api/config', configRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

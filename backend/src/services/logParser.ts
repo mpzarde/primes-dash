@@ -20,12 +20,12 @@ const CACHE_TTL = 30000; // 30 seconds
 /**
  * Parse a line from summary.log into a Batch record
  */
-function parseBatchLine(line: string, lineNumber: number): Batch | null {
+async function parseBatchLine(line: string, lineNumber: number): Promise<Batch | null> {
   const match = line.match(BATCH_SUMMARY_REGEX);
   if (!match) return null;
 
   const [, dateStr, summary] = match;
-  
+
   // Parse the summary line to extract information
   // Format: "2025-07-01 a_range=1-50 checked=50000000000000 found=22 elapsed=15450.45s rps=3236151232"
   const aRangeMatch = summary.match(/a_range=(\S+)/);
@@ -33,18 +33,28 @@ function parseBatchLine(line: string, lineNumber: number): Batch | null {
   const foundMatch = summary.match(/found=(\d+)/);
   const elapsedMatch = summary.match(/elapsed=([\d.]+)s/);
   const rpsMatch = summary.match(/rps=(\d+)/);
-  
+
   if (!aRangeMatch) return null;
-  
+
   const aRange = aRangeMatch[1];
   const logFile = `run_${aRange}.log`;
-  
+
+  // Get the file modification time to use as the timestamp
+  let timestamp = new Date(dateStr);
+  try {
+    const logFilePath = path.join(config.logsPath, logFile);
+    const stats = await fs.stat(logFilePath);
+    timestamp = stats.mtime;
+  } catch (error) {
+    console.warn(`Could not get modification time for ${logFile}, using date from summary.log`);
+  }
+
   return {
     id: `batch_${aRange}_${Date.now()}`,
-    timestamp: new Date(dateStr),
+    timestamp,
     status: 'completed', // All entries in summary.log are completed batches
-    startTime: new Date(dateStr),
-    endTime: new Date(dateStr),
+    startTime: timestamp,
+    endTime: timestamp,
     duration: elapsedMatch ? parseFloat(elapsedMatch[1]) : undefined,
     parameters: {
       aRange,
@@ -92,16 +102,16 @@ async function parseSummaryLog(): Promise<Batch[]> {
     const summaryPath = path.join(config.logsPath, 'summary.log');
     const content = await fs.readFile(summaryPath, 'utf-8');
     const lines = content.split('\n').filter(line => line.trim());
-    
-    const batches: Batch[] = [];
-    
+
+    const batchPromises: Promise<Batch | null>[] = [];
+
     for (let i = 0; i < lines.length; i++) {
-      const batch = parseBatchLine(lines[i], i + 1);
-      if (batch) {
-        batches.push(batch);
-      }
+      batchPromises.push(parseBatchLine(lines[i], i + 1));
     }
-    
+
+    const batchResults = await Promise.all(batchPromises);
+    const batches = batchResults.filter((batch): batch is Batch => batch !== null);
+
     return batches;
   } catch (error) {
     console.error('Error reading summary.log:', error);
@@ -116,23 +126,23 @@ async function scanRunLogFiles(): Promise<Solution[]> {
   try {
     const logFiles = await fs.readdir(config.logsPath);
     const runLogFiles = logFiles.filter(file => file.match(RUN_FILE_REGEX));
-    
+
     const solutions: Solution[] = [];
-    
+
     for (const logFile of runLogFiles) {
       const filePath = path.join(config.logsPath, logFile);
       const content = await fs.readFile(filePath, 'utf-8');
       const lines = content.split('\n');
-      
+
       // Generate batch ID from log file name
       const batchId = logFile.replace('.log', '');
-      
+
       for (let i = 0; i < lines.length; i++) {
         const solution = parseSolutionLine(lines[i], i + 1, logFile, batchId);
         if (solution) {
           // Extract parameters from lines preceding the "Found X cubes" line
           const parameterLines: string[] = [];
-          
+
           // Look back up to 50 lines for parameter combinations
           const startLine = Math.max(0, i - 50);
           for (let j = startLine; j < i; j++) {
@@ -141,10 +151,10 @@ async function scanRunLogFiles(): Promise<Solution[]> {
               parameterLines.push(line.trim());
             }
           }
-          
+
           // Store all parameter combinations found before this solution
           (solution as any).parameterLines = parameterLines;
-          
+
           // If we have parameter lines, we can create multiple solutions for each parameter combination
           if (parameterLines.length > 0) {
             for (let k = 0; k < parameterLines.length; k++) {
@@ -172,7 +182,7 @@ async function scanRunLogFiles(): Promise<Solution[]> {
         }
       }
     }
-    
+
     return solutions;
   } catch (error) {
     console.error('Error scanning run log files:', error);
@@ -185,12 +195,12 @@ async function scanRunLogFiles(): Promise<Solution[]> {
  */
 export async function getBatchSummaries(): Promise<Batch[]> {
   const now = Date.now();
-  
+
   // Return cached data if still valid
   if (now - lastCacheUpdate < CACHE_TTL && batchCache.length > 0) {
     return batchCache;
   }
-  
+
   try {
     batchCache = await parseSummaryLog();
     lastCacheUpdate = now;
@@ -206,12 +216,12 @@ export async function getBatchSummaries(): Promise<Batch[]> {
  */
 export async function getSolutions(): Promise<Solution[]> {
   const now = Date.now();
-  
+
   // Return cached data if still valid
   if (now - lastCacheUpdate < CACHE_TTL && solutionCache.length > 0) {
     return solutionCache;
   }
-  
+
   try {
     solutionCache = await scanRunLogFiles();
     lastCacheUpdate = now;
@@ -227,22 +237,22 @@ export async function getSolutions(): Promise<Solution[]> {
  */
 export function watchLogsFolder(options: LogWatcherOptions = {}): void {
   const { watchForNewFiles = true, watchDelay = 1000 } = options;
-  
+
   if (!watchForNewFiles) return;
-  
+
   try {
     const watcher = watch(config.logsPath, {
       ignored: /[\/\\]\./,
       persistent: true,
       ignoreInitial: true,
     });
-    
+
     watcher
       .on('add', (filePath) => {
         const fileName = path.basename(filePath);
         if (fileName.endsWith('.log')) {
           console.log(`New log file detected: ${fileName}`);
-          
+
           // Check if it's a summary.log update or new run log
           if (fileName === 'summary.log') {
             // Parse new batch and emit event
@@ -250,7 +260,7 @@ export function watchLogsFolder(options: LogWatcherOptions = {}): void {
               try {
                 const newBatches = await parseSummaryLog();
                 const socketService = getSocketService();
-                
+
                 if (socketService && newBatches.length > batchCache.length) {
                   // Emit only the new batches
                   const newBatchesOnly = newBatches.slice(batchCache.length);
@@ -258,7 +268,7 @@ export function watchLogsFolder(options: LogWatcherOptions = {}): void {
                     socketService.emitBatchAdded(batch);
                   });
                 }
-                
+
                 batchCache = newBatches;
                 lastCacheUpdate = Date.now();
               } catch (error) {
@@ -277,7 +287,7 @@ export function watchLogsFolder(options: LogWatcherOptions = {}): void {
         const fileName = path.basename(filePath);
         if (fileName.endsWith('.log')) {
           console.log(`Log file changed: ${fileName}`);
-          
+
           // Check if it's a summary.log change
           if (fileName === 'summary.log') {
             // Parse updated batch and emit event
@@ -285,7 +295,7 @@ export function watchLogsFolder(options: LogWatcherOptions = {}): void {
               try {
                 const newBatches = await parseSummaryLog();
                 const socketService = getSocketService();
-                
+
                 if (socketService && newBatches.length > batchCache.length) {
                   // Emit only the new batches
                   const newBatchesOnly = newBatches.slice(batchCache.length);
@@ -293,7 +303,7 @@ export function watchLogsFolder(options: LogWatcherOptions = {}): void {
                     socketService.emitBatchAdded(batch);
                   });
                 }
-                
+
                 batchCache = newBatches;
                 lastCacheUpdate = Date.now();
               } catch (error) {
@@ -311,7 +321,7 @@ export function watchLogsFolder(options: LogWatcherOptions = {}): void {
       .on('error', (error) => {
         console.error('Log watcher error:', error);
       });
-    
+
     console.log(`Watching logs folder: ${config.logsPath}`);
   } catch (error) {
     console.error('Error setting up log watcher:', error);

@@ -17,7 +17,13 @@ export class SolutionService {
    * Get all solutions from the API
    */
   getSolutions(): Observable<Solution[]> {
-    return this.http.get<Solution[]>(this.API_URL).pipe(
+    return this.http.get<any>(this.API_URL).pipe(
+      map(response => {
+        if (response.success && response.data) {
+          return response.data;
+        }
+        return [];
+      }),
       tap(solutions => this.solutionsCache.next(solutions)),
       catchError(error => {
         console.error('Error fetching solutions:', error);
@@ -31,7 +37,13 @@ export class SolutionService {
    */
   getSolutionsByBatchRange(batchRange: string): Observable<Solution[]> {
     const params = new HttpParams().set('batchRange', batchRange);
-    return this.http.get<Solution[]>(this.API_URL, { params }).pipe(
+    return this.http.get<any>(this.API_URL, { params }).pipe(
+      map(response => {
+        if (response.success && response.data) {
+          return response.data;
+        }
+        return [];
+      }),
       catchError(error => {
         console.error('Error fetching solutions by batch range:', error);
         return [];

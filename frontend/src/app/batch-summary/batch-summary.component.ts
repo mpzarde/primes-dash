@@ -1,11 +1,15 @@
-import { Component, OnInit, OnDestroy, ViewChild, AfterViewInit, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, AfterViewInit } from '@angular/core';
 import { MatTableDataSource } from '@angular/material/table';
 import { MatPaginator } from '@angular/material/paginator';
 import { MatSort } from '@angular/material/sort';
-import { Subscription } from 'rxjs';
-import { Chart, ChartConfiguration, ChartType, registerables } from 'chart.js';
+import { MatDialog } from '@angular/material/dialog';
+import { Subscription, forkJoin } from 'rxjs';
 import { Batch } from '../models/batch.model';
+import { Solution } from '../models/solution.model';
 import { BatchService } from '../services/batch.service';
+import { SolutionService } from '../services/solution.service';
+import { PreferencesService } from '../services/preferences.service';
+import { PreferencesComponent } from '../preferences/preferences.component';
 
 @Component({
   selector: 'app-batch-summary',
@@ -14,163 +18,118 @@ import { BatchService } from '../services/batch.service';
 })
 export class BatchSummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild(MatPaginator) paginator!: MatPaginator;
+  @ViewChild('solutionsPaginator') solutionsPaginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
-  @ViewChild('chartCanvas', { static: false }) chartCanvas!: ElementRef<HTMLCanvasElement>;
-  
+
   displayedColumns: string[] = ['range', 'timestamp', 'checked', 'found', 'elapsed', 'rps', 'status'];
   dataSource = new MatTableDataSource<Batch>([]);
-  
-  private subscription?: Subscription;
-  private chart?: Chart;
-  
-  constructor(private batchService: BatchService) {
-    Chart.register(...registerables);
-  }
-  
+
+  // Solutions table
+  solutionsDisplayedColumns: string[] = ['tuple'];
+  solutionsDataSource = new MatTableDataSource<Solution>([]);
+  selectedBatchRange: string | null = null;
+
+  private subscriptions: Subscription[] = [];
+
+  constructor(
+    private batchService: BatchService,
+    private solutionService: SolutionService,
+    private dialog: MatDialog,
+    private preferencesService: PreferencesService
+  ) {}
+
   ngOnInit(): void {
     this.subscribeToRealTimeUpdates();
+    this.loadInitialSolutions();
   }
-  
+
   ngAfterViewInit(): void {
+    // Initialize batch table
     this.dataSource.paginator = this.paginator;
     this.dataSource.sort = this.sort;
-    
-    // Initialize chart after view is ready
-    setTimeout(() => {
-      this.initializeChart();
-    });
+
+    // Initialize solutions table
+    this.solutionsDataSource.paginator = this.solutionsPaginator;
+    this.solutionsDataSource.sort = this.sort;
   }
-  
+
   ngOnDestroy(): void {
-    if (this.subscription) {
-      this.subscription.unsubscribe();
-    }
-    if (this.chart) {
-      this.chart.destroy();
-    }
+    // Clean up all subscriptions
+    this.subscriptions.forEach(sub => sub.unsubscribe());
   }
-  
+
   private subscribeToRealTimeUpdates(): void {
-    this.subscription = this.batchService.getBatchesRealTime().subscribe({
+    const batchSubscription = this.batchService.getBatchesRealTime().subscribe({
       next: (batches: Batch[]) => {
         this.dataSource.data = batches;
-        this.updateChart(batches);
       },
       error: (error) => {
         console.error('Error receiving real-time batch updates:', error);
       }
     });
+
+    this.subscriptions.push(batchSubscription);
   }
-  
-  private initializeChart(): void {
-    if (!this.chartCanvas) {
-      return;
-    }
-    
-    const ctx = this.chartCanvas.nativeElement.getContext('2d');
-    if (!ctx) {
-      return;
-    }
-    
-    const config: ChartConfiguration = {
-      type: 'line' as ChartType,
-      data: {
-        labels: [],
-        datasets: [
-          {
-            label: 'Throughput (RPS)',
-            data: [],
-            borderColor: '#1976d2',
-            backgroundColor: 'rgba(25, 118, 210, 0.1)',
-            tension: 0.4,
-            fill: true
-          }
-        ]
+
+  private loadInitialSolutions(): void {
+    const solutionSubscription = this.solutionService.getSolutions().subscribe({
+      next: (solutions: Solution[]) => {
+        this.solutionsDataSource.data = solutions;
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          title: {
-            display: true,
-            text: 'Throughput Over Time'
-          },
-          legend: {
-            display: true,
-            position: 'top'
-          }
-        },
-        scales: {
-          x: {
-            display: true,
-            title: {
-              display: true,
-              text: 'Time'
-            }
-          },
-          y: {
-            display: true,
-            title: {
-              display: true,
-              text: 'Requests per Second (RPS)'
-            },
-            beginAtZero: true
-          }
-        },
-        elements: {
-          point: {
-            radius: 4,
-            hoverRadius: 6
-          }
-        }
+      error: (error) => {
+        console.error('Error loading solutions:', error);
       }
-    };
-    
-    this.chart = new Chart(ctx, config);
-  }
-  
-  private updateChart(batches: Batch[]): void {
-    if (!this.chart || !batches.length) {
-      return;
-    }
-    
-    // Sort batches by timestamp to ensure proper order
-    const sortedBatches = [...batches].sort((a, b) => 
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-    
-    // Limit to last 20 batches for better visualization
-    const recentBatches = sortedBatches.slice(-20);
-    
-    const labels = recentBatches.map(batch => {
-      const date = new Date(batch.timestamp);
-      return date.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        second: '2-digit'
-      });
     });
-    
-    const rpsData = recentBatches.map(batch => batch.rps);
-    
-    this.chart.data.labels = labels;
-    this.chart.data.datasets[0].data = rpsData;
-    this.chart.update('none'); // Use 'none' for better performance
+
+    this.subscriptions.push(solutionSubscription);
   }
-  
+
+  loadSolutionsByBatchRange(batchRange: string): void {
+    this.selectedBatchRange = batchRange;
+
+    const solutionSubscription = this.solutionService.getSolutionsByBatchRange(batchRange).subscribe({
+      next: (solutions: Solution[]) => {
+        this.solutionsDataSource.data = solutions;
+      },
+      error: (error) => {
+        console.error(`Error loading solutions for batch range ${batchRange}:`, error);
+      }
+    });
+
+    this.subscriptions.push(solutionSubscription);
+  }
+
+
   applyFilter(event: Event): void {
     const filterValue = (event.target as HTMLInputElement).value;
     this.dataSource.filter = filterValue.trim().toLowerCase();
-    
+
     if (this.dataSource.paginator) {
       this.dataSource.paginator.firstPage();
     }
   }
-  
+
   formatTimestamp(timestamp: string): string {
-    return new Date(timestamp).toLocaleString();
+    const date = new Date(timestamp);
+    const preferences = this.preferencesService.getPreferencesValue();
+
+    try {
+      return date.toLocaleString('en-US', {
+        timeZone: preferences.timezone,
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+    } catch (error) {
+      console.error('Error formatting timestamp with timezone:', error);
+      return date.toLocaleString();
+    }
   }
-  
+
   getStatusColor(status: string): string {
     switch (status) {
       case 'completed':
@@ -180,5 +139,35 @@ export class BatchSummaryComponent implements OnInit, OnDestroy, AfterViewInit {
       default:
         return 'warn';
     }
+  }
+
+  onBatchRowClick(batch: Batch): void {
+    if (batch && batch.range) {
+      this.loadSolutionsByBatchRange(batch.range);
+    }
+  }
+
+  clearSelectedBatch(): void {
+    this.selectedBatchRange = null;
+    this.loadInitialSolutions();
+  }
+
+  formatSolutionValues(value: number): string {
+    return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
+  openPreferences(): void {
+    const dialogRef = this.dialog.open(PreferencesComponent, {
+      width: '500px',
+      disableClose: false
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        // Refresh the view to apply new preferences
+        this.dataSource.data = [...this.dataSource.data];
+        this.solutionsDataSource.data = [...this.solutionsDataSource.data];
+      }
+    });
   }
 }
