@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getSocketService, SOCKET_EVENTS } from '../services/socketService';
+import { getCurrentTimestampWithoutTimezone, formatDateWithoutTimezone } from '../utils/dateUtils';
 
 const router = Router();
 
@@ -11,7 +12,7 @@ router.get('/', (req: Request, res: Response) => {
   try {
     const socketService = getSocketService();
     const stats = socketService?.getConnectionStats();
-    
+
     res.json({
       success: true,
       data: {
@@ -72,7 +73,7 @@ router.get('/', (req: Request, res: Response) => {
         },
         currentStats: stats || { connectedClients: 0, rooms: [] }
       },
-      timestamp: new Date().toISOString()
+      timestamp: getCurrentTimestampWithoutTimezone()
     });
   } catch (error) {
     console.error('Error in subscribe endpoint:', error);
@@ -80,7 +81,7 @@ router.get('/', (req: Request, res: Response) => {
       success: false,
       error: 'Failed to get subscription information',
       message: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString()
+      timestamp: getCurrentTimestampWithoutTimezone()
     });
   }
 });
@@ -93,11 +94,11 @@ router.get('/stats', (req: Request, res: Response) => {
   try {
     const socketService = getSocketService();
     const stats = socketService?.getConnectionStats();
-    
+
     res.json({
       success: true,
       data: stats || { connectedClients: 0, rooms: [] },
-      timestamp: new Date().toISOString()
+      timestamp: getCurrentTimestampWithoutTimezone()
     });
   } catch (error) {
     console.error('Error getting socket stats:', error);
@@ -105,7 +106,7 @@ router.get('/stats', (req: Request, res: Response) => {
       success: false,
       error: 'Failed to get socket statistics',
       message: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString()
+      timestamp: getCurrentTimestampWithoutTimezone()
     });
   }
 });
@@ -118,12 +119,12 @@ router.post('/test', (req: Request, res: Response) => {
   try {
     const { eventType, data } = req.body;
     const socketService = getSocketService();
-    
+
     if (!socketService) {
       res.status(500).json({
         success: false,
         error: 'Socket service not initialized',
-        timestamp: new Date().toISOString()
+        timestamp: getCurrentTimestampWithoutTimezone()
       });
       return;
     }
@@ -152,7 +153,7 @@ router.post('/test', (req: Request, res: Response) => {
           success: false,
           error: 'Invalid event type',
           availableTypes: ['batch_added', 'job_started', 'job_completed', 'job_failed', 'solution_found', 'error'],
-          timestamp: new Date().toISOString()
+          timestamp: getCurrentTimestampWithoutTimezone()
         });
         return;
     }
@@ -160,7 +161,7 @@ router.post('/test', (req: Request, res: Response) => {
     res.json({
       success: true,
       message: `Test event '${eventType}' emitted successfully`,
-      timestamp: new Date().toISOString()
+      timestamp: getCurrentTimestampWithoutTimezone()
     });
   } catch (error) {
     console.error('Error in test endpoint:', error);
@@ -168,7 +169,7 @@ router.post('/test', (req: Request, res: Response) => {
       success: false,
       error: 'Failed to emit test event',
       message: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString()
+      timestamp: getCurrentTimestampWithoutTimezone()
     });
   }
 });

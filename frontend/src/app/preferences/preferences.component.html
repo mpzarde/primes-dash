@@ -5,18 +5,6 @@
     <mat-dialog-content>
       <div class="form-field-container">
         <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Timezone</mat-label>
-          <mat-select formControlName="timezone">
-            <mat-option *ngFor="let tz of timezones" [value]="tz">
-              {{ tz }}
-            </mat-option>
-          </mat-select>
-          <mat-error *ngIf="preferencesForm.get('timezone')?.hasError('required')">
-            Timezone is required
-          </mat-error>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" class="full-width">
           <mat-label>Log Directory</mat-label>
           <input matInput formControlName="logDirectory" placeholder="Path to logs directory">
           <mat-hint>Example: /Users/username/projects/prime-cubes/logs</mat-hint>
@@ -24,6 +12,70 @@
             Log directory is required
           </mat-error>
         </mat-form-field>
+      </div>
+
+      <div class="upload-section">
+        <h3>Upload Batch Log</h3>
+        <p class="upload-description">
+          Upload additional batch logs from another computer. Files will be saved to the log directory.
+        </p>
+
+        <div class="file-upload-container">
+          <button
+            mat-raised-button
+            color="accent"
+            type="button"
+            (click)="fileInput.click()"
+            [disabled]="isUploading"
+          >
+            <mat-icon>upload_file</mat-icon>
+            Select Batch Log File
+          </button>
+          <input
+            #fileInput
+            type="file"
+            style="display: none"
+            (change)="onFileSelected($event)"
+            accept=".log,.txt"
+          >
+          <span class="selected-file" *ngIf="selectedFile">
+            {{ selectedFile.name }} ({{ (selectedFile.size / 1024).toFixed(2) }} KB)
+          </span>
+        </div>
+
+        <div class="upload-actions" *ngIf="selectedFile">
+          <button
+            mat-raised-button
+            color="primary"
+            type="button"
+            (click)="uploadFile()"
+            [disabled]="isUploading"
+          >
+            <mat-icon>cloud_upload</mat-icon>
+            Upload
+          </button>
+          <button
+            mat-button
+            type="button"
+            (click)="clearSelectedFile()"
+            [disabled]="isUploading"
+          >
+            Cancel
+          </button>
+        </div>
+
+        <div *ngIf="isUploading" class="upload-progress">
+          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        </div>
+
+        <div class="upload-status" *ngIf="uploadStatus">
+          <mat-icon [color]="uploadStatus.success ? 'primary' : 'warn'">
+            {{ uploadStatus.success ? 'check_circle' : 'error' }}
+          </mat-icon>
+          <span [class.error-message]="!uploadStatus.success">
+            {{ uploadStatus.message }}
+          </span>
+        </div>
       </div>
     </mat-dialog-content>
 

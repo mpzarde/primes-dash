@@ -129,4 +129,20 @@ export class SolutionService {
   clearCache(): void {
     this.solutionsCache.next([]);
   }
+
+  /**
+   * Download solutions as CSV
+   * @param batchRange Optional batch range to filter solutions
+   */
+  downloadSolutionsAsCsv(batchRange?: string): void {
+    let url = `${this.API_URL}/csv`;
+
+    // Add batchRange parameter if provided
+    if (batchRange) {
+      url += `?batchRange=${encodeURIComponent(batchRange)}`;
+    }
+
+    // Trigger download by opening the URL in a new window/tab
+    window.open(url, '_blank');
+  }
 }

@@ -1,6 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { MatDialogRef } from '@angular/material/dialog';
+import { HttpClient } from '@angular/common/http';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { PreferencesService } from '../services/preferences.service';
 import { Preferences } from '../models/preferences.model';
 
@@ -11,27 +13,16 @@ import { Preferences } from '../models/preferences.model';
 })
 export class PreferencesComponent implements OnInit {
   preferencesForm!: FormGroup;
-  timezones: string[] = [
-    'UTC',
-    'America/New_York',
-    'America/Chicago',
-    'America/Denver',
-    'America/Los_Angeles',
-    'America/Phoenix',
-    'America/Anchorage',
-    'America/Honolulu',
-    'Europe/London',
-    'Europe/Paris',
-    'Europe/Berlin',
-    'Asia/Tokyo',
-    'Asia/Shanghai',
-    'Australia/Sydney'
-  ];
+  selectedFile: File | null = null;
+  isUploading = false;
+  uploadStatus: { success: boolean; message: string } | null = null;
 
   constructor(
     private fb: FormBuilder,
     private preferencesService: PreferencesService,
-    private dialogRef: MatDialogRef<PreferencesComponent>
+    private dialogRef: MatDialogRef<PreferencesComponent>,
+    private http: HttpClient,
+    private snackBar: MatSnackBar
   ) {}
 
   ngOnInit(): void {
@@ -41,7 +32,6 @@ export class PreferencesComponent implements OnInit {
 
   private initForm(): void {
     this.preferencesForm = this.fb.group({
-      timezone: ['America/Denver', Validators.required],
       logDirectory: ['', Validators.required]
     });
   }
@@ -66,5 +56,79 @@ export class PreferencesComponent implements OnInit {
   onReset(): void {
     this.preferencesService.resetPreferences();
     this.loadPreferences();
+  }
+
+  /**
+   * Handle file selection
+   */
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.selectedFile = input.files[0];
+      this.uploadStatus = null;
+    }
+  }
+
+  /**
+   * Clear selected file
+   */
+  clearSelectedFile(): void {
+    this.selectedFile = null;
+    this.uploadStatus = null;
+  }
+
+  /**
+   * Upload the selected file
+   */
+  uploadFile(): void {
+    if (!this.selectedFile) {
+      this.snackBar.open('Please select a file first', 'Close', { duration: 3000 });
+      return;
+    }
+
+    this.isUploading = true;
+    this.uploadStatus = null;
+
+    // Read the file content
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const fileContent = e.target?.result as string;
+
+      // Send the file to the server
+      this.http.post('/api/upload', {
+        fileName: this.selectedFile?.name,
+        fileContent
+      }).subscribe({
+        next: (response: any) => {
+          this.isUploading = false;
+          this.uploadStatus = {
+            success: true,
+            message: 'File uploaded successfully'
+          };
+          this.snackBar.open('File uploaded successfully', 'Close', { duration: 3000 });
+          this.selectedFile = null;
+        },
+        error: (error) => {
+          this.isUploading = false;
+          console.error('Error uploading file:', error);
+
+          let errorMessage = 'Failed to upload file';
+          if (error.status === 409) {
+            errorMessage = `A batch log with the same name already exists`;
+          } else if (error.error && error.error.message) {
+            errorMessage = error.error.message;
+          }
+
+          this.uploadStatus = {
+            success: false,
+            message: errorMessage
+          };
+
+          this.snackBar.open(errorMessage, 'Close', { duration: 5000 });
+        }
+      });
+    };
+
+    reader.readAsText(this.selectedFile);
   }
 }

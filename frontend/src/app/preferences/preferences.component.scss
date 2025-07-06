@@ -17,3 +17,53 @@
 mat-dialog-actions {
   padding: 16px 0;
 }
+
+// Upload section styles
+.upload-section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.upload-description {
+  margin-bottom: 16px;
+  color: #666;
+  font-size: 14px;
+}
+
+.file-upload-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.selected-file {
+  font-size: 14px;
+  color: #1976d2;
+  margin-left: 8px;
+}
+
+.upload-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.upload-progress {
+  margin-bottom: 16px;
+}
+
+.upload-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 4px;
+  background-color: #f5f5f5;
+  margin-bottom: 16px;
+}
+
+.error-message {
+  color: #f44336;
+}

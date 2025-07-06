@@ -1,6 +1,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { Batch, Solution } from '../types';
+import { getCurrentTimestampWithoutTimezone, formatDateWithoutTimezone } from '../utils/dateUtils';
 
 // Socket.IO event names
 export const SOCKET_EVENTS = {
@@ -13,7 +14,7 @@ export const SOCKET_EVENTS = {
   UNSUBSCRIBE_BATCHES: 'unsubscribe:batches',
   UNSUBSCRIBE_JOBS: 'unsubscribe:jobs',
   UNSUBSCRIBE_SOLUTIONS: 'unsubscribe:solutions',
-  
+
   // Server events
   BATCH_ADDED: 'batch:added',
   BATCH_UPDATED: 'batch:updated',
@@ -84,7 +85,7 @@ export class SocketService {
       socket.emit('welcome', {
         message: 'Connected to Primes Dashboard real-time updates',
         clientId: socket.id,
-        timestamp: new Date().toISOString()
+        timestamp: getCurrentTimestampWithoutTimezone()
       });
 
       // Handle subscription requests
@@ -93,7 +94,7 @@ export class SocketService {
         console.log(`Client ${socket.id} subscribed to batch updates`);
         socket.emit('subscription:confirmed', {
           type: 'batches',
-          timestamp: new Date().toISOString()
+          timestamp: getCurrentTimestampWithoutTimezone()
         });
       });
 
@@ -102,7 +103,7 @@ export class SocketService {
         console.log(`Client ${socket.id} subscribed to job updates`);
         socket.emit('subscription:confirmed', {
           type: 'jobs',
-          timestamp: new Date().toISOString()
+          timestamp: getCurrentTimestampWithoutTimezone()
         });
       });
 
@@ -111,7 +112,7 @@ export class SocketService {
         console.log(`Client ${socket.id} subscribed to solution updates`);
         socket.emit('subscription:confirmed', {
           type: 'solutions',
-          timestamp: new Date().toISOString()
+          timestamp: getCurrentTimestampWithoutTimezone()
         });
       });
 
@@ -148,9 +149,9 @@ export class SocketService {
   public emitBatchAdded(batch: Batch): void {
     const payload: BatchAddedPayload = {
       batch,
-      timestamp: new Date().toISOString()
+      timestamp: getCurrentTimestampWithoutTimezone()
     };
-    
+
     this.io.to('batches').emit(SOCKET_EVENTS.BATCH_ADDED, payload);
     console.log(`Emitted batch added event: ${batch.id}`);
   }
@@ -159,9 +160,9 @@ export class SocketService {
   public emitBatchUpdated(batch: Batch): void {
     const payload: BatchUpdatedPayload = {
       batch,
-      timestamp: new Date().toISOString()
+      timestamp: getCurrentTimestampWithoutTimezone()
     };
-    
+
     this.io.to('batches').emit(SOCKET_EVENTS.BATCH_UPDATED, payload);
     console.log(`Emitted batch updated event: ${batch.id}`);
   }
@@ -172,10 +173,10 @@ export class SocketService {
       jobId,
       pid,
       status: 'running',
-      startTime: startTime.toISOString(),
-      timestamp: new Date().toISOString()
+      startTime: formatDateWithoutTimezone(startTime),
+      timestamp: getCurrentTimestampWithoutTimezone()
     };
-    
+
     this.io.to('jobs').emit(SOCKET_EVENTS.JOB_STARTED, payload);
     this.io.to('jobs').emit(SOCKET_EVENTS.JOB_STATUS_CHANGED, payload);
     console.log(`Emitted job started event: ${jobId} (PID: ${pid})`);
@@ -188,13 +189,13 @@ export class SocketService {
       jobId,
       pid,
       status: 'completed',
-      startTime: startTime.toISOString(),
-      endTime: endTime.toISOString(),
+      startTime: formatDateWithoutTimezone(startTime),
+      endTime: formatDateWithoutTimezone(endTime),
       duration: Math.round(duration / 1000), // Convert to seconds
       message,
-      timestamp: new Date().toISOString()
+      timestamp: getCurrentTimestampWithoutTimezone()
     };
-    
+
     this.io.to('jobs').emit(SOCKET_EVENTS.JOB_COMPLETED, payload);
     this.io.to('jobs').emit(SOCKET_EVENTS.JOB_STATUS_CHANGED, payload);
     console.log(`Emitted job completed event: ${jobId} (Duration: ${payload.duration}s)`);
@@ -207,13 +208,13 @@ export class SocketService {
       jobId,
       pid,
       status: 'failed',
-      startTime: startTime.toISOString(),
-      endTime: endTime.toISOString(),
+      startTime: formatDateWithoutTimezone(startTime),
+      endTime: formatDateWithoutTimezone(endTime),
       duration: Math.round(duration / 1000), // Convert to seconds
       message,
-      timestamp: new Date().toISOString()
+      timestamp: getCurrentTimestampWithoutTimezone()
     };
-    
+
     this.io.to('jobs').emit(SOCKET_EVENTS.JOB_FAILED, payload);
     this.io.to('jobs').emit(SOCKET_EVENTS.JOB_STATUS_CHANGED, payload);
     console.log(`Emitted job failed event: ${jobId} (Duration: ${payload.duration}s)`);
@@ -223,9 +224,9 @@ export class SocketService {
   public emitSolutionFound(solution: Solution): void {
     const payload: SolutionFoundPayload = {
       solution,
-      timestamp: new Date().toISOString()
+      timestamp: getCurrentTimestampWithoutTimezone()
     };
-    
+
     this.io.to('solutions').emit(SOCKET_EVENTS.SOLUTION_FOUND, payload);
     console.log(`Emitted solution found event: ${solution.id}`);
   }
@@ -235,9 +236,9 @@ export class SocketService {
     const payload: ErrorPayload = {
       error,
       message,
-      timestamp: new Date().toISOString()
+      timestamp: getCurrentTimestampWithoutTimezone()
     };
-    
+
     this.io.emit(SOCKET_EVENTS.ERROR, payload);
     console.log(`Emitted error event: ${error}`);
   }
@@ -246,7 +247,7 @@ export class SocketService {
   public getConnectionStats(): { connectedClients: number; rooms: string[] } {
     const rooms = Array.from(this.io.sockets.adapter.rooms.keys())
       .filter(room => !this.connectedClients.has(room)); // Filter out client IDs
-    
+
     return {
       connectedClients: this.connectedClients.size,
       rooms

@@ -3,6 +3,7 @@ import { config } from '../config';
 import fs from 'fs/promises';
 import path from 'path';
 import { clearCache } from '../services/logParser';
+import { getCurrentTimestampWithoutTimezone } from '../utils/dateUtils';
 
 const router = Router();
 
@@ -21,7 +22,7 @@ router.get('/', (req: Request, res: Response) => {
     res.json({
       success: true,
       data: safeConfig,
-      timestamp: new Date().toISOString()
+      timestamp: getCurrentTimestampWithoutTimezone()
     });
   } catch (error) {
     console.error('Error fetching configuration:', error);
@@ -29,7 +30,7 @@ router.get('/', (req: Request, res: Response) => {
       success: false,
       error: 'Failed to fetch configuration',
       message: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString()
+      timestamp: getCurrentTimestampWithoutTimezone()
     });
   }
 });
@@ -48,7 +49,7 @@ router.post('/', (req: Request, res: Response) => {
         return res.status(400).json({
           success: false,
           error: 'Missing required field: logsPath',
-          timestamp: new Date().toISOString()
+          timestamp: getCurrentTimestampWithoutTimezone()
         });
       }
 
@@ -59,7 +60,7 @@ router.post('/', (req: Request, res: Response) => {
         return res.status(400).json({
           success: false,
           error: 'Invalid logs path: directory does not exist or is not accessible',
-          timestamp: new Date().toISOString()
+          timestamp: getCurrentTimestampWithoutTimezone()
         });
       }
 
@@ -73,7 +74,7 @@ router.post('/', (req: Request, res: Response) => {
         success: true,
         message: 'Configuration updated successfully',
         data: { logsPath },
-        timestamp: new Date().toISOString()
+        timestamp: getCurrentTimestampWithoutTimezone()
       });
     } catch (error) {
       console.error('Error updating configuration:', error);
@@ -81,7 +82,7 @@ router.post('/', (req: Request, res: Response) => {
         success: false,
         error: 'Failed to update configuration',
         message: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString()
+        timestamp: getCurrentTimestampWithoutTimezone()
       });
     }
   };

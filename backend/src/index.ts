@@ -10,6 +10,8 @@ import stateRouter from './routes/state';
 import jobRouter from './routes/job';
 import subscribeRouter from './routes/subscribe';
 import configRouter from './routes/config';
+import uploadRouter from './routes/upload';
+import { getCurrentTimestampWithoutTimezone } from './utils/dateUtils';
 
 // Create Express app
 const app = express();
@@ -26,7 +28,7 @@ app.use(express.json());
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  console.log(`${getCurrentTimestampWithoutTimezone()} - ${req.method} ${req.path}`);
   next();
 });
 
@@ -37,10 +39,11 @@ app.use('/api/state', stateRouter);
 app.use('/api/job', jobRouter);
 app.use('/api/subscribe', subscribeRouter);
 app.use('/api/config', configRouter);
+app.use('/api/upload', uploadRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', timestamp: getCurrentTimestampWithoutTimezone() });
 });
 
 // Root endpoint
@@ -70,7 +73,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(500).json({ 
     error: 'Internal server error',
     message: err.message,
-    timestamp: new Date().toISOString()
+    timestamp: getCurrentTimestampWithoutTimezone()
   });
 });
 
@@ -79,7 +82,7 @@ app.use((req, res) => {
   res.status(404).json({ 
     error: 'Not found',
     path: req.path,
-    timestamp: new Date().toISOString()
+    timestamp: getCurrentTimestampWithoutTimezone()
   });
 });
 
