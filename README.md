@@ -152,12 +152,61 @@ The backend is configured using environment variables:
 
 ### Frontend Configuration
 
-The frontend is configured using the Angular environment files:
+The frontend uses a simplified configuration approach:
 
-- `environment.ts`: Development configuration
-- `environment.prod.ts`: Production configuration
+- **`environment.ts`**: Single environment file for all modes
+- **`proxy.conf.json`**: Development proxy configuration to forward API requests to the backend
 
-The proxy configuration (`proxy.conf.json`) is used during development to forward API requests to the backend.
+#### Environment Configuration
+
+The application uses a single environment file (`environment.ts`) that works for both development and production:
+
+```typescript
+export const environment = {
+  production: false,  // Always development mode when using dev server
+  apiBaseUrl: ''     // Always use relative URLs with proxy
+};
+```
+
+This simplified approach assumes:
+- The frontend is always accessed via proper hostnames (never `localhost` directly)
+- Relative URLs work in all scenarios through proxy configuration
+- No need for environment file switching complexity
+
+#### Backend Connection
+
+The backend configuration is streamlined for security:
+
+- **Development Server**: Backend runs on `localhost:3000`, accessed via Angular's proxy
+  - Frontend accessible from any hostname: `http://<hostname>:4200`
+  - API calls: `http://<hostname>:4200/api/*` → `http://localhost:3000/api/*`
+  - WebSocket: `http://<hostname>:4200/socket.io/*` → `http://localhost:3000/socket.io/*`
+  - Backend remains on localhost for security
+
+- **Production**: Frontend and backend served from the same domain
+  - API calls use relative URLs (e.g., `/api/*`)
+  - WebSocket connections use relative URLs (e.g., `/socket.io/*`)
+
+#### Proxy Configuration
+
+The `proxy.conf.json` handles all API and WebSocket routing:
+
+```json
+{
+  "/api/*": {
+    "target": "http://localhost:3000",
+    "secure": false,
+    "changeOrigin": true,
+    "ws": false
+  },
+  "/socket.io/*": {
+    "target": "http://localhost:3000",
+    "secure": false,
+    "changeOrigin": true,
+    "ws": true
+  }
+}
+```
 
 ## Features
 

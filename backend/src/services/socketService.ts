@@ -3,6 +3,8 @@ import { Server as HTTPServer } from 'http';
 import { Batch, Solution } from '../types';
 import { getCurrentTimestampWithoutTimezone, formatDateWithoutTimezone } from '../utils/dateUtils';
 
+const nodeEnv = process.env.NODE_ENV || 'development';
+
 // Socket.IO event names
 export const SOCKET_EVENTS = {
   // Client events
@@ -67,8 +69,9 @@ export class SocketService {
   constructor(server: HTTPServer) {
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: "*", // Configure this for production
-        methods: ["GET", "POST"]
+        origin: nodeEnv === 'development' ? '*' : 'http://your.production.domain',
+        methods: ['GET','POST'],
+        credentials: true
       },
       path: '/socket.io'
     });

@@ -6,7 +6,7 @@ import { Batch, Solution, LogWatcherOptions } from '../types';
 import { getSocketService } from './socketService';
 
 // Regular expressions for parsing log files
-const BATCH_SUMMARY_REGEX = /^(\d{4}-\d{2}-\d{2})\s+(.*)$/;
+const BATCH_SUMMARY_REGEX = /^(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2}))?\s+(.*)$/;
 const SOLUTION_REGEX = /Found\s+(\d+)\s+cubes\s+of\s+primes/i;
 const PARAMETER_REGEX = /\((\d+),\s*(\d+),\s*(\d+),\s*(\d+)\)/;
 const RUN_FILE_REGEX = /^run_(.+)\.log$/;
@@ -24,10 +24,11 @@ async function parseBatchLine(line: string, lineNumber: number): Promise<Batch |
   const match = line.match(BATCH_SUMMARY_REGEX);
   if (!match) return null;
 
-  const [, dateStr, summary] = match;
+  const [, dateStr, timeStr, summary] = match;
 
   // Parse the summary line to extract information
   // Format: "2025-07-01 a_range=1-50 checked=50000000000000 found=22 elapsed=15450.45s rps=3236151232"
+  // Or: "2025-07-02 17:09 a_range=5000-5049 checked=50000000000000 found=1 elapsed=8334.30s rps=6000720081"
   const aRangeMatch = summary.match(/a_range=(\S+)/);
   const checkedMatch = summary.match(/checked=(\d+)/);
   const foundMatch = summary.match(/found=(\d+)/);
@@ -39,14 +40,11 @@ async function parseBatchLine(line: string, lineNumber: number): Promise<Batch |
   const aRange = aRangeMatch[1];
   const logFile = `run_${aRange}.log`;
 
-  // Get the file modification time to use as the timestamp
+  // Use the timestamp from summary.log (with time if available, otherwise use start of day)
   let timestamp = new Date(dateStr);
-  try {
-    const logFilePath = path.join(config.logsPath, logFile);
-    const stats = await fs.stat(logFilePath);
-    timestamp = stats.mtime;
-  } catch (error) {
-    console.warn(`Could not get modification time for ${logFile}, using date from summary.log`);
+  if (timeStr) {
+    // If we have a time component, use it
+    timestamp = new Date(`${dateStr}T${timeStr}:00`);
   }
 
   return {
