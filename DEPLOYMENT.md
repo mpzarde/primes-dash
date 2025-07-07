@@ -2,26 +2,26 @@
 
 ## Development vs Production Modes
 
-### Development Mode (Default)
+### Development Mode (Recommended)
 **How it works:**
 - Backend runs on port 3000 (TypeScript compiled on-the-fly with ts-node)
-- Frontend runs on port 4200 (Angular dev server with hot reload)
-- Two separate processes, two separate ports
-- CORS enabled for cross-origin requests between ports
+- Frontend is pre-built and served by the backend
+- Single process, single port
+- No CORS issues (everything served from same origin)
 
 **Use for:**
 - Local development
 - IDE debugging
-- Hot reload during coding
+- Consistent environment with production
 
 **Start with:**
 ```bash
-# Terminal 1
-cd backend && npm run dev
-
-# Terminal 2  
-cd frontend && ng serve
+# Build frontend and start backend
+npm start
+# or explicitly
+npm run start:dev
 ```
+
 
 ### Production Mode (For Deployment)
 **How it works:**
@@ -29,20 +29,26 @@ cd frontend && ng serve
 - Frontend builds to static HTML/CSS/JS files
 - Backend serves both API and frontend files on port 3000
 - Single process, single port, faster performance
+- Can run in the background with status monitoring
 
 **Use for:**
 - Sharing with others via ngrok/tunnels
 - Better performance (compiled code)
 - Simpler deployment (one URL)
 - Production-like environment
+- Long-running deployments
 
 **Build and start:**
 ```bash
-# Build both apps
-./build.sh
+# Build and start in one command (runs in background)
+./run-prod.sh
 
-# Start in production mode
-./start-prod.sh
+# Additional commands
+./run-prod.sh start    # Build and start the server in the background
+./run-prod.sh stop     # Stop the running server
+./run-prod.sh status   # Check if the server is running
+./run-prod.sh logs     # Display the server logs
+./run-prod.sh logs follow  # Follow the logs in real-time
 ```
 
 ## Why Use Production Mode for Sharing?
@@ -63,16 +69,26 @@ primes-dash/
 ├── frontend/
 │   ├── src/           # Source Angular
 │   └── dist/          # Built static files (created by build)
-└── build.sh           # Compiles both apps
+├── run-prod.sh        # Build and run in production mode
+├── primes-dash.pid    # PID file (created when server is running)
+└── primes-dash.log    # Log file (created when server is running)
 ```
 
 ## Quick Start Commands
 
 ```bash
-# Development (two terminals)
-npm run dev                 # Backend only
-ng serve                    # Frontend only
+# Recommended Development Mode (single process)
+npm start                   # Build frontend and start backend
+
+# Backend Development Only
+cd backend && npm run dev   # Start backend only
+
+# Frontend Development Only (not recommended for most cases)
+cd frontend && npm start    # Start frontend dev server only
 
 # Production (single process)
-./build.sh && ./start-prod.sh
+./run-prod.sh                # Build and start in background
+./run-prod.sh status         # Check server status
+./run-prod.sh logs           # View logs
+./run-prod.sh stop           # Stop the server
 ```

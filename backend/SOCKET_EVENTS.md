@@ -5,7 +5,7 @@ This document describes the Socket.IO events and their payload shapes for the Pr
 ## Connection Information
 
 - **Socket.IO Path**: `/socket.io`
-- **Connection URL**: `ws://localhost:3001/socket.io`
+- **Connection URL**: `ws://localhost:3000/socket.io`
 - **Namespace**: Default (`/`)
 
 ## Client Events (Events clients can emit)
@@ -296,12 +296,12 @@ Example:
 ```javascript
 import { io } from 'socket.io-client';
 
-const socket = io('ws://localhost:3001');
+const socket = io('ws://localhost:3000');
 
 // Listen for connection
 socket.on('connect', () => {
   console.log('Connected to server');
-  
+
   // Subscribe to batch and job updates
   socket.emit('subscribe:batches');
   socket.emit('subscribe:jobs');
@@ -347,7 +347,7 @@ export class SocketService {
   private socket: Socket;
 
   constructor() {
-    this.socket = io('ws://localhost:3001');
+    this.socket = io('ws://localhost:3000');
   }
 
   // Subscribe to batch updates

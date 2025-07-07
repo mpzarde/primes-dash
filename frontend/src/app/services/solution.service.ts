@@ -142,7 +142,21 @@ export class SolutionService {
       url += `?batchRange=${encodeURIComponent(batchRange)}`;
     }
 
-    // Trigger download by opening the URL in a new window/tab
-    window.open(url, '_blank');
+    // Safari-compatible approach for downloading files without opening a new tab
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'solutions.csv'; // Specify filename
+    link.target = '_self'; // Force same tab/window
+    link.rel = 'noopener noreferrer'; // Security best practice
+    link.style.display = 'none';
+    document.body.appendChild(link);
+
+    // Click the link
+    link.click();
+
+    // Small delay before removing to ensure Safari has time to process
+    setTimeout(() => {
+      document.body.removeChild(link);
+    }, 100);
   }
 }

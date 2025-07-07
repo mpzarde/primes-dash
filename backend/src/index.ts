@@ -48,21 +48,24 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: getCurrentTimestampWithoutTimezone() });
 });
 
-// In production mode: serve frontend static files from this backend server
+// Serve frontend static files from this backend server in all environments
 // This allows everything to run on a single port (3000) instead of separate dev servers
 // Benefits: easier deployment, single URL for sharing, no CORS issues
-if (process.env.NODE_ENV === 'production') {
-  const frontendPath = path.join(__dirname, '../../frontend/dist/frontend');
-  
-  // Serve static files (CSS, JS, images) from Angular build output
-  app.use(express.static(frontendPath));
-  
-  // Catch-all handler: send index.html for any non-API routes
-  // This enables Angular client-side routing to work properly
-  app.get('*', (req, res) => {
+const frontendPath = path.join(__dirname, '../../frontend/dist/frontend');
+
+// Serve static files (CSS, JS, images) from Angular build output
+app.use(express.static(frontendPath));
+
+// Catch-all handler: send index.html for any non-API routes
+// This enables Angular client-side routing to work properly
+app.get('*', (req, res, next) => {
+  // Only serve the frontend if the path doesn't start with /api
+  if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
     res.sendFile(path.join(frontendPath, 'index.html'));
-  });
-}
+  } else {
+    next();
+  }
+});
 
 // Root endpoint
 app.get('/', (req, res) => {

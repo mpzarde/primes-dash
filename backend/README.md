@@ -76,7 +76,7 @@ interface LogWatcherOptions {
 The service uses environment variables for configuration:
 
 - `LOGS_PATH`: Path to the logs directory (default: `/Users/mpzarde/projects/prime-cubes/logs`)
-- `PORT`: Server port (default: 3001)
+- `PORT`: Server port (default: 3000)
 - `NODE_ENV`: Environment (default: development)
 
 ## Log File Formats

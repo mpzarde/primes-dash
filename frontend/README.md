@@ -4,7 +4,7 @@ This project was generated with [Angular CLI](https://github.com/angular/angular
 
 ## Development server
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.
+In the single-server mode (recommended), the frontend is built and served by the backend server on port 3000. For standalone frontend development (not recommended), run `ng serve` for a dev server, but note that API calls will not work properly in this mode.
 
 ## Code scaffolding
 

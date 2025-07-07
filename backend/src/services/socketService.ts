@@ -69,7 +69,7 @@ export class SocketService {
   constructor(server: HTTPServer) {
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: nodeEnv === 'development' ? '*' : 'http://your.production.domain',
+        origin: '*', // Allow all origins in all environments
         methods: ['GET','POST'],
         credentials: true
       },
