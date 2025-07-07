@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
+import path from 'path';
 import { config } from './config';
 import { initLogParser } from './services/logParser';
 import { initializeSocketService } from './services/socketService';
@@ -46,6 +47,22 @@ app.use('/api/upload', uploadRouter);
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: getCurrentTimestampWithoutTimezone() });
 });
+
+// In production mode: serve frontend static files from this backend server
+// This allows everything to run on a single port (3000) instead of separate dev servers
+// Benefits: easier deployment, single URL for sharing, no CORS issues
+if (process.env.NODE_ENV === 'production') {
+  const frontendPath = path.join(__dirname, '../../frontend/dist/frontend');
+  
+  // Serve static files (CSS, JS, images) from Angular build output
+  app.use(express.static(frontendPath));
+  
+  // Catch-all handler: send index.html for any non-API routes
+  // This enables Angular client-side routing to work properly
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  });
+}
 
 // Root endpoint
 app.get('/', (req, res) => {
