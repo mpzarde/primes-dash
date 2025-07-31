@@ -29,8 +29,8 @@ export interface NextJobResponse {
   providedIn: 'root'
 })
 export class JobService {
-  private readonly STATE_API_URL = '/api/state';
-  private readonly JOB_API_URL = '/api/job/next';
+  private readonly STATE_API_URL = '/pdash/api/state';
+  private readonly JOB_API_URL = '/pdash/api/job/next';
   private jobStateSubject = new BehaviorSubject<JobState>({
     isRunning: false,
     totalProcessed: 0,

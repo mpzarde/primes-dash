@@ -1,5 +1,6 @@
-import fs from 'fs/promises';
+import fs from 'fs';
 import path from 'path';
+import readline from 'readline';
 import { watch } from 'chokidar';
 import { config } from '../config';
 import { Batch, Solution, LogWatcherOptions } from '../types';
@@ -93,44 +94,51 @@ function parseSolutionLine(line: string, lineNumber: number, logFile: string, ba
 }
 
 /**
- * Read and parse summary.log file
+ * Read and parse summary.log file using streaming
  */
 async function parseSummaryLog(): Promise<Batch[]> {
   try {
     // Ensure logs directory exists
     try {
-      await fs.access(config.logsPath);
+      await fs.promises.access(config.logsPath);
     } catch (error) {
       console.log(`Logs directory does not exist, creating: ${config.logsPath}`);
-      await fs.mkdir(config.logsPath, { recursive: true });
+      await fs.promises.mkdir(config.logsPath, { recursive: true });
     }
 
     const summaryPath = path.join(config.logsPath, 'summary.log');
 
     // Check if summary.log exists
     try {
-      await fs.access(summaryPath);
+      await fs.promises.access(summaryPath);
     } catch (error) {
       console.log(`summary.log does not exist, creating sample file: ${summaryPath}`);
       // Create a sample batch entry to ensure there's at least one batch to display
       const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
       const sampleEntry = `${today} a_range=1-100 checked=1000000 found=5 elapsed=10.5s rps=95238`;
-      await fs.writeFile(summaryPath, sampleEntry, 'utf-8');
+      await fs.promises.writeFile(summaryPath, sampleEntry, 'utf-8');
 
       // Parse and return the sample batch
       const batch = await parseBatchLine(sampleEntry, 1);
       return batch ? [batch] : [];
     }
 
-    const content = await fs.readFile(summaryPath, 'utf-8');
-    const lines = content.split('\n').filter(line => line.trim());
+    const readStream = fs.createReadStream(summaryPath, 'utf-8');
+    const rl = readline.createInterface({ input: readStream, crlfDelay: Infinity });
+    const lines: string[] = [];
+
+    for await (const line of rl) {
+      if (line.trim()) {
+        lines.push(line);
+      }
+    }
 
     // If the file exists but is empty, add a sample batch entry
     if (lines.length === 0) {
       console.log(`summary.log is empty, adding sample batch entry`);
       const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
       const sampleEntry = `${today} a_range=1-100 checked=1000000 found=5 elapsed=10.5s rps=95238`;
-      await fs.appendFile(summaryPath, sampleEntry, 'utf-8');
+      await fs.promises.appendFile(summaryPath, sampleEntry, 'utf-8');
 
       // Parse and return the sample batch
       const batch = await parseBatchLine(sampleEntry, 1);
@@ -154,34 +162,42 @@ async function parseSummaryLog(): Promise<Batch[]> {
 }
 
 /**
- * Scan individual run_*.log files for solutions
+ * Scan individual run_*.log files for solutions using streaming
  */
 async function scanRunLogFiles(): Promise<Solution[]> {
   try {
     // Ensure logs directory exists
     try {
-      await fs.access(config.logsPath);
+      await fs.promises.access(config.logsPath);
     } catch (error) {
       console.log(`Logs directory does not exist, creating: ${config.logsPath}`);
-      await fs.mkdir(config.logsPath, { recursive: true });
+      await fs.promises.mkdir(config.logsPath, { recursive: true });
       return []; // Return empty array since the directory was just created
     }
 
-    const logFiles = await fs.readdir(config.logsPath);
+    const logFiles = await fs.promises.readdir(config.logsPath);
     const runLogFiles = logFiles.filter(file => file.match(RUN_FILE_REGEX));
 
     const solutions: Solution[] = [];
 
     for (const logFile of runLogFiles) {
       const filePath = path.join(config.logsPath, logFile);
-      const content = await fs.readFile(filePath, 'utf-8');
-      const lines = content.split('\n');
+      
+      // First pass: collect all lines with their line numbers for parameter extraction
+      const readStream1 = fs.createReadStream(filePath, 'utf-8');
+      const rl1 = readline.createInterface({ input: readStream1, crlfDelay: Infinity });
+      const allLines: string[] = [];
+      
+      for await (const line of rl1) {
+        allLines.push(line);
+      }
 
       // Generate batch ID from log file name
       const batchId = logFile.replace('.log', '');
 
-      for (let i = 0; i < lines.length; i++) {
-        const solution = parseSolutionLine(lines[i], i + 1, logFile, batchId);
+      // Second pass: process solutions with access to all lines for parameter extraction
+      for (let i = 0; i < allLines.length; i++) {
+        const solution = parseSolutionLine(allLines[i], i + 1, logFile, batchId);
         if (solution) {
           // Extract parameters from lines preceding the "Found X cubes" line
           const parameterLines: string[] = [];
@@ -189,7 +205,7 @@ async function scanRunLogFiles(): Promise<Solution[]> {
           // Look back up to 50 lines for parameter combinations
           const startLine = Math.max(0, i - 50);
           for (let j = startLine; j < i; j++) {
-            const line = lines[j];
+            const line = allLines[j];
             if (line.match(PARAMETER_REGEX)) {
               parameterLines.push(line.trim());
             }
@@ -286,20 +302,20 @@ export function watchLogsFolder(options: LogWatcherOptions = {}): void {
   try {
     // Ensure logs directory exists
     try {
-      fs.access(config.logsPath).catch(async (error) => {
+      fs.promises.access(config.logsPath).catch(async (error) => {
         console.log(`Logs directory does not exist, creating: ${config.logsPath}`);
-        await fs.mkdir(config.logsPath, { recursive: true });
+        await fs.promises.mkdir(config.logsPath, { recursive: true });
 
         // Create summary.log file with sample batch entry if it doesn't exist
         const summaryPath = path.join(config.logsPath, 'summary.log');
         try {
-          await fs.access(summaryPath);
+          await fs.promises.access(summaryPath);
         } catch (error) {
           console.log(`summary.log does not exist, creating sample file: ${summaryPath}`);
           // Create a sample batch entry to ensure there's at least one batch to display
           const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
           const sampleEntry = `${today} a_range=1-100 checked=1000000 found=5 elapsed=10.5s rps=95238`;
-          await fs.writeFile(summaryPath, sampleEntry, 'utf-8');
+          await fs.promises.writeFile(summaryPath, sampleEntry, 'utf-8');
 
           // Force cache refresh
           clearCache();

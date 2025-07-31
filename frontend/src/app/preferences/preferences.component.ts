@@ -95,7 +95,7 @@ export class PreferencesComponent implements OnInit {
       const fileContent = e.target?.result as string;
 
       // Send the file to the server
-      this.http.post('/api/upload', {
+      this.http.post('/pdash/api/upload', {
         fileName: this.selectedFile?.name,
         fileContent
       }).subscribe({

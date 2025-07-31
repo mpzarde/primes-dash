@@ -8,7 +8,7 @@ import { Batch } from '../models';
   providedIn: 'root'
 })
 export class BatchService {
-  private readonly API_URL = '/api/batches';
+  private readonly API_URL = '/pdash/api/batches';
   private batchesSubject = new BehaviorSubject<Batch[]>([]);
   private pollingInterval = 5000; // 5 seconds
 

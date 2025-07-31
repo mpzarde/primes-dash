@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
-import fs from 'fs/promises';
+import fs from 'fs';
+import readline from 'readline';
 import { config } from '../config';
 
 const router = Router();
@@ -17,8 +18,14 @@ router.get('/', (req: Request, res: Response) => {
       let stateContent = {};
 
       try {
-        const fileContent = await fs.readFile(statePath, 'utf-8');
-        stateContent = JSON.parse(fileContent);
+        const readStream = fs.createReadStream(statePath, 'utf-8');
+        const rl = readline.createInterface({ input: readStream, crlfDelay: Infinity });
+        
+        for await (const line of rl) {
+          if (line.trim()) {
+            stateContent = JSON.parse(line);
+          }
+        }
       } catch (error) {
         console.warn('State file not found or invalid JSON:', error);
         stateContent = { next_a: 0, complete: false };

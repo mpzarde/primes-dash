@@ -64,7 +64,7 @@ export class PreferencesService {
    * Update the backend log directory
    */
   private updateBackendLogDirectory(logDirectory: string): void {
-    this.http.post('/api/config', { logsPath: logDirectory }).subscribe({
+    this.http.post('/pdash/api/config', { logsPath: logDirectory }).subscribe({
       next: () => console.log('Backend log directory updated successfully'),
       error: (error) => console.error('Error updating backend log directory:', error)
     });

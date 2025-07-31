@@ -34,7 +34,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
+// Routes - keep existing API routes for backward compatibility
 app.use('/api/batches', batchesRouter);
 app.use('/api/solutions', solutionsRouter);
 app.use('/api/state', stateRouter);
@@ -42,6 +42,15 @@ app.use('/api/job', jobRouter);
 app.use('/api/subscribe', subscribeRouter);
 app.use('/api/config', configRouter);
 app.use('/api/upload', uploadRouter);
+
+// Add prefixed API routes under /pdash
+app.use('/pdash/api/batches', batchesRouter);
+app.use('/pdash/api/solutions', solutionsRouter);
+app.use('/pdash/api/state', stateRouter);
+app.use('/pdash/api/job', jobRouter);
+app.use('/pdash/api/subscribe', subscribeRouter);
+app.use('/pdash/api/config', configRouter);
+app.use('/pdash/api/upload', uploadRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -56,11 +65,14 @@ const frontendPath = path.join(__dirname, '../../frontend/dist/frontend');
 // Serve static files (CSS, JS, images) from Angular build output
 app.use(express.static(frontendPath));
 
+// Also serve static files at /pdash/ path for tunnel routing
+app.use("/pdash", express.static(frontendPath));
+
 // Catch-all handler: send index.html for any non-API routes
 // This enables Angular client-side routing to work properly
 app.get('*', (req, res, next) => {
-  // Only serve the frontend if the path doesn't start with /api
-  if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
+  // Only serve the frontend if the path doesn't start with /api and /pdash/api
+  if (!req.path.startsWith('/api') && !req.path.startsWith('/pdash/api') && !req.path.startsWith('/socket.io')) {
     res.sendFile(path.join(frontendPath, 'index.html'));
   } else {
     next();

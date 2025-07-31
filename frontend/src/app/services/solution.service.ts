@@ -8,7 +8,7 @@ import { Solution } from '../models';
   providedIn: 'root'
 })
 export class SolutionService {
-  private readonly API_URL = '/api/solutions';
+  private readonly API_URL = '/pdash/api/solutions';
   private solutionsCache = new BehaviorSubject<Solution[]>([]);
 
   constructor(private http: HttpClient) {}
