@@ -66,6 +66,9 @@ export class BatchSummaryComponent implements OnInit, OnDestroy, AfterViewInit {
           // Extract the first number from the range (e.g., "901-950" -> 901)
           const firstNumber = parseInt(item.range.split('-')[0], 10);
           return isNaN(firstNumber) ? 0 : firstNumber;
+        case 'uniqueCubes':
+          // Get the unique cubes count for this batch
+          return this.getUniqueCubesCount(item.range);
         case 'timestamp':
           return item.timestamp;
         case 'checked':

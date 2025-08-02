@@ -1,10 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
-import { Transform, Readable } from 'stream';
-import { pipeline } from 'stream/promises';
-import { config } from '../config';
-import { Batch, Solution } from '../types';
+import {config} from '../config';
+import {Batch, Solution} from '../types';
 
 // Types for filtering and aggregation (keeping existing types)
 export interface FilterOptions {
@@ -64,7 +62,7 @@ export async function* streamBatchesGenerator(
     for await (const line of rl) {
       if (!line.trim()) continue;
 
-      const batch = parseBatchLine(line);
+      const batch = await parseBatchLine(line);
       if (!batch) continue;
 
       // Apply filters
@@ -172,7 +170,7 @@ export async function* streamSolutionsGenerator(
 }
 
 // Helper functions (keeping existing logic)
-function parseBatchLine(line: string): Batch | null {
+async function parseBatchLine(line: string): Promise<Batch | null> {
   const match = line.match(BATCH_SUMMARY_REGEX);
   if (!match) return null;
 
@@ -188,6 +186,22 @@ function parseBatchLine(line: string): Batch | null {
 
   const aRange = aRangeMatch[1];
   const logFile = `run_${aRange}.log`;
+  const logFilePath = path.join(config.logsPath, logFile);
+
+  // Get actual found count from log file if it exists
+  let actualFoundCount: number | undefined = foundMatch ? parseInt(foundMatch[1], 10) : undefined;
+  
+  try {
+    // Check if log file exists
+    await fs.promises.access(logFilePath);
+    
+    // Use the simple approach to find solution count
+    actualFoundCount = await findSolutionFromBottomSimple(logFilePath);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.log(`Could not read log file ${logFile}: ${errorMessage}`);
+    // Fall back to the found count from the summary line
+  }
 
   let timestamp = new Date(dateStr);
   if (timeStr) {
@@ -204,7 +218,7 @@ function parseBatchLine(line: string): Batch | null {
     parameters: {
       aRange,
       checked: checkedMatch ? parseInt(checkedMatch[1], 10) : undefined,
-      found: foundMatch ? parseInt(foundMatch[1], 10) : undefined,
+      found: actualFoundCount,
       rps: rpsMatch ? parseInt(rpsMatch[1], 10) : undefined,
     },
     logFile,
@@ -365,3 +379,23 @@ export async function streamSolutions(
   }
   return results;
 }
+
+// Simple implementation to find solution count from log file
+async function findSolutionFromBottomSimple(logFilePath: string): Promise<number | undefined> {
+  try {
+    const fileContent = await fs.promises.readFile(logFilePath, 'utf-8');
+    const lines = fileContent.split('\n');
+    
+    // Look for the "Found X cubes of primes" line from the end
+    for (let i = lines.length - 1; i >= Math.max(0, lines.length - 100); i--) {
+      const solutionMatch = lines[i].match(SOLUTION_REGEX);
+      if (solutionMatch) {
+        return parseInt(solutionMatch[1], 10);
+      }
+    }
+    return undefined;
+  } catch (error) {
+    return undefined;
+  }
+}
+
