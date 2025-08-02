@@ -17,4 +17,8 @@ export interface Solution {
   logFile?: string;
   lineNumber?: number;
   rawLine?: string;
+  cubeValue?: number;
+  sortedParams?: number[];
+  duplicateCount?: number;
+  isUnique?: boolean;
 }

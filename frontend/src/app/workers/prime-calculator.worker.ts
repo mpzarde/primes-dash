@@ -60,14 +60,19 @@ function computeCube(solution: { a: number, b: number, c: number, d: number }) {
 
 addEventListener('message', ({ data }) => {
   const { solutions, type } = data;
-  
+
   if (type === 'computeCubes') {
     const results = solutions.map((solution: any) => {
-      const solutionKey = `${solution.a},${solution.b},${solution.c},${solution.d}`;
-      const cubeData = computeCube(solution);
+      // Extract parameters from parameterCombination or use defaults
+      const a = solution.parameterCombination?.a || 0;
+      const b = solution.parameterCombination?.b || 0;
+      const c = solution.parameterCombination?.c || 0;
+      const d = solution.parameterCombination?.d || 0;
+      const solutionKey = `${a},${b},${c},${d}`;
+      const cubeData = computeCube({a, b, c, d});
       return { solutionKey, cubeData };
     });
-    
+
     postMessage({ type: 'cubesComputed', results });
   }
 });

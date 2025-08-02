@@ -59,6 +59,30 @@ export class BatchSummaryComponent implements OnInit, OnDestroy, AfterViewInit {
     this.dataSource.paginator = this.paginator;
     this.dataSource.sort = this.sort;
 
+    // Custom sorting for range column to sort by numeric value
+    this.dataSource.sortingDataAccessor = (item: Batch, property: string) => {
+      switch(property) {
+        case 'range':
+          // Extract the first number from the range (e.g., "901-950" -> 901)
+          const firstNumber = parseInt(item.range.split('-')[0], 10);
+          return isNaN(firstNumber) ? 0 : firstNumber;
+        case 'timestamp':
+          return item.timestamp;
+        case 'checked':
+          return item.checked;
+        case 'found':
+          return item.found;
+        case 'elapsed':
+          return item.elapsed;
+        case 'rps':
+          return item.rps;
+        case 'status':
+          return item.status;
+        default:
+          return '';
+      }
+    };
+
     // Initialize solutions table
     this.solutionsDataSource.paginator = this.solutionsPaginator;
     this.solutionsDataSource.sort = this.sort;
@@ -305,7 +329,11 @@ export class BatchSummaryComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // Compute all 27 values in the 3x3x3 cube for a given solution
   computeCube(solution: Solution): { primes: number[], isUnique: boolean, duplicates: number[] } {
-    const { a, b, c, d } = solution;
+    // Extract parameters from parameterCombination or use defaults
+    const a = solution.parameterCombination?.a || 0;
+    const b = solution.parameterCombination?.b || 0;
+    const c = solution.parameterCombination?.c || 0;
+    const d = solution.parameterCombination?.d || 0;
     const primes: number[] = [];
 
     // Compute all 27 values in the cube
@@ -347,7 +375,12 @@ export class BatchSummaryComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // Get the cube data for a solution, computing it if not already cached
   getSolutionCubeData(solution: Solution): { primes: number[], isUnique: boolean, duplicates: number[] } {
-    const solutionKey = `${solution.a},${solution.b},${solution.c},${solution.d}`;
+    // Extract parameters from parameterCombination or use defaults
+    const a = solution.parameterCombination?.a || 0;
+    const b = solution.parameterCombination?.b || 0;
+    const c = solution.parameterCombination?.c || 0;
+    const d = solution.parameterCombination?.d || 0;
+    const solutionKey = `${a},${b},${c},${d}`;
 
     if (!this.solutionCubesMap.has(solutionKey)) {
       const cubeData = this.computeCube(solution);

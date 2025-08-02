@@ -93,7 +93,10 @@ export class SolutionService {
     return this.http.put<Solution>(`${this.API_URL}/${id}`, solution).pipe(
       tap(updatedSolution => {
         const currentSolutions = this.solutionsCache.value;
-        const index = currentSolutions.findIndex(s => s.a === updatedSolution.a && s.b === updatedSolution.b);
+        const index = currentSolutions.findIndex(s =>
+          s.parameterCombination?.a === updatedSolution.parameterCombination?.a &&
+          s.parameterCombination?.b === updatedSolution.parameterCombination?.b
+        );
         if (index !== -1) {
           currentSolutions[index] = updatedSolution;
           this.solutionsCache.next([...currentSolutions]);
@@ -113,7 +116,9 @@ export class SolutionService {
     return this.http.delete<void>(`${this.API_URL}/${id}`).pipe(
       tap(() => {
         const currentSolutions = this.solutionsCache.value;
-        const filteredSolutions = currentSolutions.filter(s => `${s.a}-${s.b}` !== id);
+        const filteredSolutions = currentSolutions.filter(s =>
+          `${s.parameterCombination?.a || 0}-${s.parameterCombination?.b || 0}` !== id
+        );
         this.solutionsCache.next(filteredSolutions);
       }),
       catchError(error => {

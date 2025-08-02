@@ -8,7 +8,8 @@ import { Batch, Solution } from './models';
   template: `
     <div class="container">
       <h2>Example Usage of Services</h2>
-      
+
+
       <!-- Job State -->
       <div class="section">
         <h3>Job State</h3>
@@ -19,7 +20,7 @@ import { Batch, Solution } from './models';
         <button (click)="startJob()">Start Job</button>
         <button (click)="stopJob()">Stop Job</button>
       </div>
-      
+
       <!-- Batches -->
       <div class="section">
         <h3>Batches ({{ batches.length }})</h3>
@@ -29,13 +30,13 @@ import { Batch, Solution } from './models';
           </li>
         </ul>
       </div>
-      
+
       <!-- Solutions -->
       <div class="section">
         <h3>Solutions ({{ solutions.length }})</h3>
         <ul>
           <li *ngFor="let solution of solutions">
-            a={{ solution.a }}, b={{ solution.b }}, c={{ solution.c }}, d={{ solution.d }}
+            a={{ solution.parameterCombination?.a || 0 }}, b={{ solution.parameterCombination?.b || 0 }}, c={{ solution.parameterCombination?.c || 0 }}, d={{ solution.parameterCombination?.d || 0 }}
           </li>
         </ul>
       </div>
@@ -55,7 +56,7 @@ export class ExampleUsageComponent implements OnInit, OnDestroy {
     totalProcessed: 0,
     totalFound: 0
   };
-  
+
   private subscriptions: Subscription[] = [];
 
   constructor(

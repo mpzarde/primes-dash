@@ -154,7 +154,7 @@
                 [matTooltip]="getSolutionTooltip(solution)"
                 matTooltipPosition="above"
               >
-                ({{solution.a}}, {{solution.b}}, {{solution.c}}, {{solution.d}})
+                ({{solution.parameterCombination?.a || 0}}, {{solution.parameterCombination?.b || 0}}, {{solution.parameterCombination?.c || 0}}, {{solution.parameterCombination?.d || 0}})
               </span>
               <span *ngIf="i < solutionsDataSource.data.length - 1">,</span>
             </ng-container>
