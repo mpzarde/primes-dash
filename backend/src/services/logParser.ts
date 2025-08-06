@@ -5,6 +5,7 @@ import { watch } from 'chokidar';
 import { config } from '../config';
 import { Batch, Solution, LogWatcherOptions } from '../types';
 import { getSocketService } from './socketService';
+import { parseLogFileFromBottom, LogFileInfo } from './streamingLogParser';
 
 // Regular expressions for parsing log files
 const BATCH_SUMMARY_REGEX = /^(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2}))?\s+(.*)$/;
@@ -94,7 +95,8 @@ function parseSolutionLine(line: string, lineNumber: number, logFile: string, ba
 }
 
 /**
- * Read and parse summary.log file using streaming
+ * Get batch information by scanning log files directly
+ * This version uses directory listing instead of summary.log
  */
 async function parseSummaryLog(): Promise<Batch[]> {
   try {
@@ -104,65 +106,120 @@ async function parseSummaryLog(): Promise<Batch[]> {
     } catch (error) {
       console.log(`Logs directory does not exist, creating: ${config.logsPath}`);
       await fs.promises.mkdir(config.logsPath, { recursive: true });
-    }
+      
+      // Create a sample log file to ensure there's at least one batch to display
+      const sampleLogPath = path.join(config.logsPath, 'run_1-100.log');
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+      const timeStr = `${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}:${String(today.getSeconds()).padStart(2, '0')}`;
+      
+      const sampleLogContent = 
+`${todayStr} ${timeStr} Starting search: a∈[1,100], b∈[1,10000], c∈[1,10000], d∈[1,10000]
+Total combinations: 10000000000
+Mode: parallel
+Threads: 12
 
-    const summaryPath = path.join(config.logsPath, 'summary.log');
+${todayStr} ${timeStr} Search completed. Checked 10000000000 combinations in 105.23 seconds.
+Throughput: 95028984 checks/second
 
-    // Check if summary.log exists
-    try {
-      await fs.promises.access(summaryPath);
-    } catch (error) {
-      console.log(`summary.log does not exist, creating sample file: ${summaryPath}`);
-      // Create a sample batch entry to ensure there's at least one batch to display
-      const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
-      const sampleEntry = `${today} a_range=1-100 checked=1000000 found=5 elapsed=10.5s rps=95238`;
-      await fs.promises.writeFile(summaryPath, sampleEntry, 'utf-8');
-
-      // Parse and return the sample batch
-      const batch = await parseBatchLine(sampleEntry, 1);
-      return batch ? [batch] : [];
-    }
-
-    const readStream = fs.createReadStream(summaryPath, 'utf-8');
-    const rl = readline.createInterface({ input: readStream, crlfDelay: Infinity });
-    const lines: string[] = [];
-
-    for await (const line of rl) {
-      if (line.trim()) {
-        lines.push(line);
+Cubes of primes found:
+(17, 21, 29, 33)
+Found 1 cubes of primes.`;
+      
+      await fs.promises.writeFile(sampleLogPath, sampleLogContent, 'utf-8');
+      
+      // Parse the sample log file
+      const logInfo = await parseLogFileFromBottom(sampleLogPath);
+      if (logInfo) {
+        const batch: Batch = {
+          id: `batch_1-100_${Date.now()}`,
+          timestamp: logInfo.startTime,
+          status: 'completed',
+          startTime: logInfo.startTime,
+          endTime: logInfo.endTime,
+          duration: logInfo.duration,
+          parameters: {
+            aRange: '1-100',
+            checked: logInfo.totalCombinations,
+            found: logInfo.solutionCount,
+            rps: logInfo.throughput,
+            mode: logInfo.mode,
+            threads: logInfo.threads
+          },
+          logFile: 'run_1-100.log',
+          summary: `a_range=1-100 checked=${logInfo.totalCombinations} found=${logInfo.solutionCount} elapsed=${logInfo.duration}s rps=${logInfo.throughput}`
+        };
+        return [batch];
       }
+      
+      return [];
     }
 
-    // If the file exists but is empty, add a sample batch entry
-    if (lines.length === 0) {
-      console.log(`summary.log is empty, adding sample batch entry`);
-      const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
-      const sampleEntry = `${today} a_range=1-100 checked=1000000 found=5 elapsed=10.5s rps=95238`;
-      await fs.promises.appendFile(summaryPath, sampleEntry, 'utf-8');
-
-      // Parse and return the sample batch
-      const batch = await parseBatchLine(sampleEntry, 1);
-      return batch ? [batch] : [];
+    // Get all log files from the directory
+    const logFiles = await fs.promises.readdir(config.logsPath);
+    const runLogFiles = logFiles.filter(file => file.match(RUN_FILE_REGEX));
+    
+    if (runLogFiles.length === 0) {
+      console.log('No log files found in the directory');
+      return [];
     }
 
-    const batchPromises: Promise<Batch | null>[] = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      batchPromises.push(parseBatchLine(lines[i], i + 1));
+    // Sort log files by modification time (newest first)
+    const logFilesWithStats = await Promise.all(
+      runLogFiles.map(async (file) => {
+        const filePath = path.join(config.logsPath, file);
+        const stats = await fs.promises.stat(filePath);
+        return { file, stats };
+      })
+    );
+    
+    logFilesWithStats.sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime());
+    
+    // Process each log file to extract batch information
+    const batches: Batch[] = [];
+    
+    for (const { file } of logFilesWithStats) {
+      const filePath = path.join(config.logsPath, file);
+      const aRange = file.match(RUN_FILE_REGEX)?.[1];
+      
+      if (!aRange) continue;
+      
+      // Parse log file to extract batch information
+      const logInfo = await parseLogFileFromBottom(filePath);
+      if (!logInfo) continue;
+      
+      // Create batch object from log file information
+      const batch: Batch = {
+        id: `batch_${aRange}_${Date.now()}`,
+        timestamp: logInfo.startTime,
+        status: 'completed',
+        startTime: logInfo.startTime,
+        endTime: logInfo.endTime,
+        duration: logInfo.duration,
+        parameters: {
+          aRange,
+          checked: logInfo.totalCombinations,
+          found: logInfo.solutionCount,
+          rps: logInfo.throughput,
+          mode: logInfo.mode,
+          threads: logInfo.threads
+        },
+        logFile: file,
+        summary: `a_range=${aRange} checked=${logInfo.totalCombinations} found=${logInfo.solutionCount} elapsed=${logInfo.duration}s rps=${logInfo.throughput}`
+      };
+      
+      batches.push(batch);
     }
-
-    const batchResults = await Promise.all(batchPromises);
-    const batches = batchResults.filter((batch): batch is Batch => batch !== null);
 
     return batches;
   } catch (error) {
-    console.error('Error reading summary.log:', error);
+    console.error('Error scanning log files:', error);
     return [];
   }
 }
 
 /**
- * Scan individual run_*.log files for solutions using streaming
+ * Scan individual run_*.log files for solutions using bottom-up parsing approach
  */
 async function scanRunLogFiles(): Promise<Solution[]> {
   try {
@@ -178,67 +235,62 @@ async function scanRunLogFiles(): Promise<Solution[]> {
     const logFiles = await fs.promises.readdir(config.logsPath);
     const runLogFiles = logFiles.filter(file => file.match(RUN_FILE_REGEX));
 
+    // Sort log files by modification time (newest first)
+    const logFilesWithStats = await Promise.all(
+      runLogFiles.map(async (file) => {
+        const filePath = path.join(config.logsPath, file);
+        const stats = await fs.promises.stat(filePath);
+        return { file, stats };
+      })
+    );
+    
+    logFilesWithStats.sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime());
+    
     const solutions: Solution[] = [];
 
-    for (const logFile of runLogFiles) {
+    for (const { file: logFile } of logFilesWithStats) {
       const filePath = path.join(config.logsPath, logFile);
       
-      // First pass: collect all lines with their line numbers for parameter extraction
-      const readStream1 = fs.createReadStream(filePath, 'utf-8');
-      const rl1 = readline.createInterface({ input: readStream1, crlfDelay: Infinity });
-      const allLines: string[] = [];
-      
-      for await (const line of rl1) {
-        allLines.push(line);
-      }
-
       // Generate batch ID from log file name
       const batchId = logFile.replace('.log', '');
 
-      // Second pass: process solutions with access to all lines for parameter extraction
-      for (let i = 0; i < allLines.length; i++) {
-        const solution = parseSolutionLine(allLines[i], i + 1, logFile, batchId);
-        if (solution) {
-          // Extract parameters from lines preceding the "Found X cubes" line
-          const parameterLines: string[] = [];
-
-          // Look back up to 50 lines for parameter combinations
-          const startLine = Math.max(0, i - 50);
-          for (let j = startLine; j < i; j++) {
-            const line = allLines[j];
-            if (line.match(PARAMETER_REGEX)) {
-              parameterLines.push(line.trim());
-            }
-          }
-
-          // Store all parameter combinations found before this solution
-          (solution as any).parameterLines = parameterLines;
-
-          // If we have parameter lines, we can create multiple solutions for each parameter combination
-          if (parameterLines.length > 0) {
-            for (let k = 0; k < parameterLines.length; k++) {
-              const paramMatch = parameterLines[k].match(PARAMETER_REGEX);
-              if (paramMatch) {
-                const [, a, b, c, d] = paramMatch;
-                const paramSolution: Solution = {
-                  ...solution,
-                  id: `solution_${batchId}_${i + 1}_${k}_${Date.now()}`,
-                  parameterCombination: {
-                    a: parseInt(a, 10),
-                    b: parseInt(b, 10),
-                    c: parseInt(c, 10),
-                    d: parseInt(d, 10),
-                  },
-                  rawLine: `${parameterLines[k]} -> ${solution.rawLine}`,
-                };
-                solutions.push(paramSolution);
-              }
-            }
-          } else {
-            // If no parameters found, add the solution as-is
-            solutions.push(solution);
-          }
-        }
+      // Use the bottom-up parsing approach to extract all information
+      const logInfo = await parseLogFileFromBottom(filePath);
+      if (!logInfo) continue;
+      
+      // Process each solution from the parsed log info
+      for (const solutionParams of logInfo.solutions) {
+        // Create solution object
+        const params = solutionParams;
+        
+        // Calculate cube value
+        const cubeValue = Math.pow(params.a, 3) + Math.pow(params.b, 3) + 
+                          Math.pow(params.c, 3) + Math.pow(params.d, 3);
+        
+        // Sort parameters for display
+        const sortedParams = [params.a, params.b, params.c, params.d].sort((x, y) => x - y);
+        
+        // Count duplicate parameters
+        const values = [params.a, params.b, params.c, params.d];
+        const uniqueValues = new Set(values);
+        const duplicateCount = values.length - uniqueValues.size;
+        
+        const solution: Solution = {
+          id: `solution_${batchId}_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`,
+          batchId: batchId,
+          timestamp: logInfo.endTime, // Use end time as the solution timestamp
+          cubesCount: logInfo.solutionCount,
+          parameterCombination: params,
+          logFile,
+          lineNumber: 0, // We don't track line numbers in the bottom-up approach
+          rawLine: `(${params.a}, ${params.b}, ${params.c}, ${params.d})`,
+          cubeValue,
+          sortedParams,
+          duplicateCount,
+          isUnique: duplicateCount === 0
+        };
+        
+        solutions.push(solution);
       }
     }
 

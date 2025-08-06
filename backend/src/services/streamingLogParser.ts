@@ -37,33 +37,93 @@ const RUN_FILE_REGEX = /^run_(.+)\.log$/;
 
 /**
  * Async generator for streaming batches with backpressure support
+ * This version uses directory listing instead of summary.log
+ * 
+ * Key improvements:
+ * 1. No dependency on summary.log - finds log files directly from the directory
+ * 2. Uses bottom-up parsing to extract accurate information from each log file
+ * 3. Sorts log files by modification time to show newest batches first
+ * 4. Extracts additional information like mode and thread count
+ * 
+ * The function yields Batch objects one at a time, allowing for efficient streaming
+ * with backpressure support (the consumer controls the pace of processing).
  */
 export async function* streamBatchesGenerator(
   filterOptions: FilterOptions = {},
   aggregationOptions: AggregationOptions = {}
 ): AsyncGenerator<Batch> {
   try {
-    const summaryPath = path.join(config.logsPath, 'summary.log');
-    
-    // Check if file exists
+    // Check if logs directory exists
     try {
-      await fs.promises.access(summaryPath);
+      await fs.promises.access(config.logsPath);
     } catch (error) {
-      console.log('summary.log does not exist, returning empty stream');
+      console.log('Logs directory does not exist, returning empty stream');
       return;
     }
 
-    const readStream = fs.createReadStream(summaryPath, 'utf-8');
-    const rl = readline.createInterface({ input: readStream, crlfDelay: Infinity });
+    // Get all log files from the directory
+    const logFiles = await fs.promises.readdir(config.logsPath);
+    const runLogFiles = logFiles.filter(file => file.match(RUN_FILE_REGEX));
     
+    if (runLogFiles.length === 0) {
+      console.log('No log files found in the directory');
+      return;
+    }
+
     let processedCount = 0;
     let yieldedCount = 0;
 
-    for await (const line of rl) {
-      if (!line.trim()) continue;
+    // Sort log files by modification time (newest first)
+    const logFilesWithStats = await Promise.all(
+      runLogFiles.map(async (file) => {
+        const filePath = path.join(config.logsPath, file);
+        const stats = await fs.promises.stat(filePath);
+        return { file, stats };
+      })
+    );
+    
+    logFilesWithStats.sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime());
+    
+    // Process each log file
+    for (const { file } of logFilesWithStats) {
+      // Handle limit
+      if (aggregationOptions.limit && yieldedCount >= aggregationOptions.limit) {
+        break;
+      }
 
-      const batch = await parseBatchLine(line);
-      if (!batch) continue;
+      const filePath = path.join(config.logsPath, file);
+      const aRange = file.match(RUN_FILE_REGEX)?.[1];
+      
+      if (!aRange) continue;
+      
+      // Skip if batch range filter is specified and doesn't match
+      if (filterOptions.batchRange && aRange !== filterOptions.batchRange) {
+        continue;
+      }
+
+      // Parse log file to extract batch information
+      const logInfo = await parseLogFileFromBottom(filePath);
+      if (!logInfo) continue;
+      
+      // Create batch object from log file information
+      const batch: Batch = {
+        id: `batch_${aRange}_${Date.now()}`,
+        timestamp: logInfo.startTime,
+        status: 'completed',
+        startTime: logInfo.startTime,
+        endTime: logInfo.endTime,
+        duration: logInfo.duration,
+        parameters: {
+          aRange,
+          checked: logInfo.totalCombinations,
+          found: logInfo.solutionCount,
+          rps: logInfo.throughput,
+          mode: logInfo.mode,
+          threads: logInfo.threads
+        },
+        logFile: file,
+        summary: `a_range=${aRange} checked=${logInfo.totalCombinations} found=${logInfo.solutionCount} elapsed=${logInfo.duration}s rps=${logInfo.throughput}`
+      };
 
       // Apply filters
       if (!shouldIncludeBatch(batch, filterOptions)) continue;
@@ -72,11 +132,6 @@ export async function* streamBatchesGenerator(
       if (aggregationOptions.offset && processedCount < aggregationOptions.offset) {
         processedCount++;
         continue;
-      }
-
-      // Handle limit
-      if (aggregationOptions.limit && yieldedCount >= aggregationOptions.limit) {
-        break;
       }
 
       processedCount++;
@@ -91,6 +146,18 @@ export async function* streamBatchesGenerator(
 
 /**
  * Async generator for streaming solutions with backpressure support
+ * This version uses the bottom-up parsing approach
+ * 
+ * Key improvements:
+ * 1. Extracts solutions directly from log files using bottom-up parsing
+ * 2. Sorts log files by modification time to show newest solutions first
+ * 3. Creates complete solution objects with calculated properties:
+ *    - Cube value (a³ + b³ + c³ + d³)
+ *    - Sorted parameters for easier comparison
+ *    - Duplicate count and uniqueness flag
+ * 
+ * The function yields Solution objects one at a time, allowing for efficient streaming
+ * with backpressure support (the consumer controls the pace of processing).
  */
 export async function* streamSolutionsGenerator(
   filterOptions: FilterOptions = {},
@@ -105,13 +172,30 @@ export async function* streamSolutionsGenerator(
       return;
     }
 
+    // Get all log files from the directory
     const logFiles = await fs.promises.readdir(config.logsPath);
     const runLogFiles = logFiles.filter(file => file.match(RUN_FILE_REGEX));
+    
+    if (runLogFiles.length === 0) {
+      console.log('No log files found in the directory');
+      return;
+    }
+
+    // Sort log files by modification time (newest first)
+    const logFilesWithStats = await Promise.all(
+      runLogFiles.map(async (file) => {
+        const filePath = path.join(config.logsPath, file);
+        const stats = await fs.promises.stat(filePath);
+        return { file, stats };
+      })
+    );
+    
+    logFilesWithStats.sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime());
 
     let processedCount = 0;
     let yieldedCount = 0;
 
-    for (const logFile of runLogFiles) {
+    for (const { file: logFile } of logFilesWithStats) {
       // Handle limit across all files
       if (aggregationOptions.limit && yieldedCount >= aggregationOptions.limit) {
         break;
@@ -128,39 +212,49 @@ export async function* streamSolutionsGenerator(
         }
       }
 
-      // Read and process file line by line
-      const readStream = fs.createReadStream(filePath, 'utf-8');
-      const rl = readline.createInterface({ input: readStream, crlfDelay: Infinity });
+      // Parse log file to extract all information
+      const logInfo = await parseLogFileFromBottom(filePath);
+      if (!logInfo) continue;
       
-      // We need to read all lines first for parameter extraction
-      const allLines: string[] = [];
-      for await (const line of rl) {
-        allLines.push(line);
-      }
-
-      // Process each line for solutions
-      for (let lineNumber = 0; lineNumber < allLines.length; lineNumber++) {
-        const line = allLines[lineNumber];
-        const solutions = parseSolutionLine(line, lineNumber, allLines, logFile, batchId);
+      // Process each solution from the parsed log info
+      for (const solutionParams of logInfo.solutions) {
+        // Create solution object
+        const params = solutionParams;
+        const cubeValue = Math.pow(params.a, 3) + Math.pow(params.b, 3) + Math.pow(params.c, 3) + Math.pow(params.d, 3);
+        const sortedParams = [params.a, params.b, params.c, params.d].sort((x, y) => x - y);
+        const duplicateCount = countDuplicateParams(params);
         
-        for (const solution of solutions) {
-          if (!shouldIncludeSolution(solution, filterOptions)) continue;
+        const solution: Solution = {
+          id: `solution_${batchId}_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`,
+          batchId: batchId,
+          timestamp: logInfo.endTime, // Use end time as the solution timestamp
+          cubesCount: logInfo.solutionCount,
+          parameterCombination: params,
+          logFile,
+          lineNumber: 0, // We don't track line numbers in the bottom-up approach
+          rawLine: `(${params.a}, ${params.b}, ${params.c}, ${params.d})`,
+          cubeValue,
+          sortedParams,
+          duplicateCount,
+          isUnique: duplicateCount === 0
+        };
+        
+        if (!shouldIncludeSolution(solution, filterOptions)) continue;
 
-          // Handle offset
-          if (aggregationOptions.offset && processedCount < aggregationOptions.offset) {
-            processedCount++;
-            continue;
-          }
-
-          // Handle limit
-          if (aggregationOptions.limit && yieldedCount >= aggregationOptions.limit) {
-            return;
-          }
-
+        // Handle offset
+        if (aggregationOptions.offset && processedCount < aggregationOptions.offset) {
           processedCount++;
-          yieldedCount++;
-          yield solution;
+          continue;
         }
+
+        // Handle limit
+        if (aggregationOptions.limit && yieldedCount >= aggregationOptions.limit) {
+          return;
+        }
+
+        processedCount++;
+        yieldedCount++;
+        yield solution;
       }
     }
   } catch (error) {
@@ -380,20 +474,179 @@ export async function streamSolutions(
   return results;
 }
 
-// Simple implementation to find solution count from log file
-async function findSolutionFromBottomSimple(logFilePath: string): Promise<number | undefined> {
+/**
+ * Comprehensive implementation to parse log file from bottom to top
+ * This extracts all relevant information including:
+ * - Number of solutions found (last line)
+ * - The actual solutions (parameter combinations)
+ * - Throughput and performance metrics
+ * - Start and end times
+ * - Mode and thread count
+ * 
+ * This approach is more reliable than top-down parsing because:
+ * 1. The last line always contains the final solution count
+ * 2. Solutions are listed right before the final count
+ * 3. Performance metrics are consistent and easy to extract
+ * 4. We can still get the start time from the first line
+ */
+export interface LogFileInfo {
+  solutionCount: number;
+  solutions: Array<{a: number, b: number, c: number, d: number}>;
+  throughput: number;
+  totalCombinations: number;
+  duration: number;
+  startTime: Date;
+  endTime: Date;
+  mode?: string;
+  threads?: number;
+}
+
+export async function parseLogFileFromBottom(logFilePath: string): Promise<LogFileInfo | undefined> {
   try {
     const fileContent = await fs.promises.readFile(logFilePath, 'utf-8');
-    const lines = fileContent.split('\n');
+    const lines = fileContent.split('\n').filter(line => line.trim().length > 0);
     
-    // Look for the "Found X cubes of primes" line from the end
-    for (let i = lines.length - 1; i >= Math.max(0, lines.length - 100); i--) {
-      const solutionMatch = lines[i].match(SOLUTION_REGEX);
-      if (solutionMatch) {
-        return parseInt(solutionMatch[1], 10);
+    if (lines.length === 0) {
+      return undefined;
+    }
+
+    // Default values
+    const result: LogFileInfo = {
+      solutionCount: 0,
+      solutions: [],
+      throughput: 0,
+      totalCombinations: 0,
+      duration: 0,
+      startTime: new Date(),
+      endTime: new Date()
+    };
+
+    // Start from the bottom
+    let i = lines.length - 1;
+    
+    // Last line should be "Found X cubes of primes." or "No cubes of primes found in this range."
+    const lastLine = lines[i];
+    const solutionCountMatch = lastLine.match(/Found\s+(\d+)\s+cubes?\s+of\s+primes/i);
+    if (solutionCountMatch) {
+      result.solutionCount = parseInt(solutionCountMatch[1], 10);
+      i--;
+    } else if (lastLine.includes("No cubes of primes found in this range")) {
+      // Handle the case where no solutions were found
+      result.solutionCount = 0;
+      i--;
+    } else {
+      // If not found, try to scan a few lines up
+      let foundSolutionCount = false;
+      for (let j = i; j >= Math.max(0, i - 5); j--) {
+        const solutionMatch = lines[j].match(/Found\s+(\d+)\s+cubes?\s+of\s+primes/i);
+        if (solutionMatch) {
+          result.solutionCount = parseInt(solutionMatch[1], 10);
+          i = j - 1;
+          foundSolutionCount = true;
+          break;
+        } else if (lines[j].includes("No cubes of primes found in this range")) {
+          result.solutionCount = 0;
+          i = j - 1;
+          foundSolutionCount = true;
+          break;
+        }
+      }
+      
+      if (!foundSolutionCount) {
+        return undefined; // Not a valid log file or incomplete
       }
     }
+
+    // Parse solutions (going up from the solution count line)
+    while (i >= 0) {
+      const line = lines[i];
+      
+      // Stop when we reach "Cubes of primes found:" line
+      if (line.includes("Cubes of primes found:")) {
+        i--;
+        break;
+      }
+      
+      // Parse solution line with format (a, b, c, d)
+      const paramMatch = line.match(PARAMETER_REGEX);
+      if (paramMatch) {
+        const [, a, b, c, d] = paramMatch;
+        result.solutions.push({
+          a: parseInt(a, 10),
+          b: parseInt(b, 10),
+          c: parseInt(c, 10),
+          d: parseInt(d, 10)
+        });
+      }
+      
+      i--;
+    }
+
+    // Continue parsing upward for throughput and completion info
+    while (i >= 0) {
+      const line = lines[i];
+      
+      // Look for throughput line
+      const throughputMatch = line.match(/Throughput:\s+([\d,]+)\s+checks\/second/i);
+      if (throughputMatch) {
+        result.throughput = parseInt(throughputMatch[1].replace(/,/g, ''), 10);
+        i--;
+        continue;
+      }
+      
+      // Look for completion line with duration
+      const completionMatch = line.match(/Search completed\.\s+Checked\s+([\d,]+)\s+combinations\s+in\s+([\d.]+)\s+seconds/i);
+      if (completionMatch) {
+        result.totalCombinations = parseInt(completionMatch[1].replace(/,/g, ''), 10);
+        result.duration = parseFloat(completionMatch[2]);
+        
+        // Extract end time from this line
+        const timeMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/);
+        if (timeMatch) {
+          result.endTime = new Date(timeMatch[1]);
+        }
+        
+        i--;
+        continue;
+      }
+      
+      // Look for mode and threads
+      const modeMatch = line.match(/Mode:\s+(\w+)/i);
+      if (modeMatch) {
+        result.mode = modeMatch[1];
+        i--;
+        continue;
+      }
+      
+      const threadsMatch = line.match(/Threads:\s+(\d+)/i);
+      if (threadsMatch) {
+        result.threads = parseInt(threadsMatch[1], 10);
+        i--;
+        continue;
+      }
+      
+      // Look for starting line with parameters
+      const startMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+Starting\s+search/i);
+      if (startMatch) {
+        result.startTime = new Date(startMatch[1]);
+        break; // We've reached the start of the log
+      }
+      
+      i--;
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error parsing log file:', error);
     return undefined;
+  }
+}
+
+// Simple implementation to find solution count from log file (kept for backward compatibility)
+async function findSolutionFromBottomSimple(logFilePath: string): Promise<number | undefined> {
+  try {
+    const logInfo = await parseLogFileFromBottom(logFilePath);
+    return logInfo?.solutionCount;
   } catch (error) {
     return undefined;
   }
